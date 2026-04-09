@@ -159,7 +159,10 @@ class cg
         return inst;
     }
 
-    /// @brief Generate a random city, weighted by population.
+    /// @brief Generate a random city.
+    ///
+    /// By default, selection is population-weighted. Call weighted(false)
+    /// to switch to uniform random selection.
     /// @return A city object with all GeoNames fields.
     /// @throws std::runtime_error If no city data has been loaded.
     [[nodiscard]] city get_city()
@@ -188,7 +191,9 @@ class cg
         call_engine.seed(static_cast<std::mt19937::result_type>(
             (call_seed ^ (call_seed >> 32U))));
 
-        auto idx = _distribution(call_engine.engine());
+        auto idx = _weighted
+                       ? _distribution(call_engine.engine())
+                       : _uniform(call_engine.engine());
         city result = _cities[idx];
         result._seed = call_seed;
         return result;
@@ -232,7 +237,11 @@ class cg
             (call_seed ^ (call_seed >> 32U))));
 
         const auto& idx = it->second;
-        auto selected = idx.distribution(call_engine.engine());
+        auto selected = _weighted
+                            ? idx.distribution(call_engine.engine())
+                            : std::uniform_int_distribution<std::size_t>(
+                                  0, idx.city_indices.size() - 1)(
+                                  call_engine.engine());
         city result = _cities[idx.city_indices[selected]];
         result._seed = call_seed;
         return result;
@@ -265,6 +274,26 @@ class cg
     }
 
     /// @}
+
+    /// @brief Set whether generation is population-weighted or uniform.
+    ///
+    /// When `true` (default), larger cities are proportionally more likely
+    /// to be selected. When `false`, every city has an equal probability.
+    ///
+    /// @param enable `true` for weighted, `false` for uniform.
+    /// @return `*this` for chaining.
+    cg& weighted(bool enable)
+    {
+        _weighted = enable;
+        return *this;
+    }
+
+    /// @brief Query whether generation is population-weighted.
+    /// @return `true` if weighted (default), `false` if uniform.
+    [[nodiscard]] bool weighted() const
+    {
+        return _weighted;
+    }
 
     /// @brief Check whether any city data has been loaded.
     /// @return `true` if at least one city is available.
@@ -369,6 +398,12 @@ class cg
     // Population-weighted distribution over _cities indices.
     mutable std::discrete_distribution<std::size_t> _distribution;
 
+    // Uniform distribution over _cities indices.
+    mutable std::uniform_int_distribution<std::size_t> _uniform;
+
+    // Whether to use population-weighted (true) or uniform (false) selection.
+    bool _weighted{true};
+
     // Pre-built per-country index for O(1) country-filtered lookups.
     struct country_entry
     {
@@ -425,6 +460,13 @@ class cg
 
         _distribution = std::discrete_distribution<std::size_t>(
             weights.begin(), weights.end());
+
+        // Uniform distribution.
+        if (!_cities.empty())
+        {
+            _uniform = std::uniform_int_distribution<std::size_t>(
+                0, _cities.size() - 1);
+        }
 
         // Country index.
         _country_index.clear();

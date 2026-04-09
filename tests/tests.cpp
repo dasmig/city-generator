@@ -489,3 +489,64 @@ TEST_CASE("country filter seeded - cached path deterministic",
     REQUIRE(c1.geonameid == c2.geonameid);
     REQUIRE(c1.country_code == "DE");
 }
+
+// ---------------------------------------------------------------------------
+// Uniform (non-weighted) generation
+// ---------------------------------------------------------------------------
+
+TEST_CASE("weighted defaults to true", "[weighting]")
+{
+    auto gen = make_loaded_generator();
+    REQUIRE(gen.weighted() == true);
+}
+
+TEST_CASE("weighted(false) enables uniform selection", "[weighting]")
+{
+    auto gen = make_loaded_generator();
+    gen.weighted(false).seed(99);
+    REQUIRE(gen.weighted() == false);
+
+    // With uniform selection, smaller cities should appear much more often
+    // than with weighted selection. Count cities below the median.
+    // Use 100k as threshold — works for both lite and full tiers.
+    int below_100k = 0;
+    static constexpr int draws = 200;
+
+    for (int i = 0; i < draws; ++i)
+    {
+        auto c = gen.get_city();
+        if (c.population < 100'000)
+        {
+            ++below_100k;
+        }
+    }
+
+    // The vast majority of cities in any tier have pop < 100k.
+    // Uniform selection should produce many of them (vs. weighted which
+    // strongly favors the few large cities).
+    REQUIRE(below_100k > draws / 2);
+
+    gen.weighted(true).unseed();
+}
+
+TEST_CASE("weighted(false) with country filter", "[weighting][country]")
+{
+    auto gen = make_loaded_generator();
+    gen.weighted(false).seed(42);
+
+    for (int i = 0; i < 20; ++i)
+    {
+        auto c = gen.get_city("JP");
+        REQUIRE(c.country_code == "JP");
+    }
+
+    gen.weighted(true).unseed();
+}
+
+TEST_CASE("weighted toggle is chainable", "[weighting]")
+{
+    auto gen = make_loaded_generator();
+    auto& ref = gen.weighted(false);
+    REQUIRE(&ref == &gen);
+    gen.weighted(true);
+}
