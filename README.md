@@ -2,6 +2,8 @@
 
 > **Requires C++23** (e.g., `-std=c++23` for GCC/Clang, `/std:c++latest` for MSVC).
 
+[![City Generator for C++](https://raw.githubusercontent.com/dasmig/city-generator/master/doc/city-generator.png)](https://github.com/dasmig/city-generator/releases)
+
 [![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/dasmig/city-generator/master/LICENSE.MIT)
 [![CI](https://github.com/dasmig/city-generator/actions/workflows/ci.yml/badge.svg)](https://github.com/dasmig/city-generator/actions/workflows/ci.yml)
 [![GitHub Releases](https://img.shields.io/github/release/dasmig/city-generator.svg)](https://github.com/dasmig/city-generator/releases)
@@ -9,8 +11,9 @@
 [![C++23](https://img.shields.io/badge/standard-C%2B%2B23-blue.svg)](https://en.cppreference.com/w/cpp/23)
 [![Header-only](https://img.shields.io/badge/type-header--only-green.svg)](https://github.com/dasmig/city-generator#integration)
 [![Platform](https://img.shields.io/badge/platform-linux%20|%20windows%20|%20macos-lightgrey.svg)](https://github.com/dasmig/city-generator)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue.svg)](https://dasmig.github.io/city-generator/)
 
-**[Usage Guide](doc/usage.md)** · **[Releases](https://github.com/dasmig/city-generator/releases)**
+**[API Reference](https://dasmig.github.io/city-generator/)** · **[Usage Guide](doc/usage.md)** · **[Releases](https://github.com/dasmig/city-generator/releases)**
 
 ## Features
 
@@ -23,6 +26,8 @@
 - **GeoNames Data**. Ships with two dataset tiers — *full* (~200k cities, pop ≥ 500) and *lite* (~25k major cities, pop ≥ 15,000) — from GeoNames, licensed under CC BY 4.0.
 
 - **Deterministic Seeding**. Per-call `get_city(seed)` for reproducible results, generator-level `seed()` / `unseed()` for deterministic sequences, and `city::seed()` for replaying a previous generation.
+
+- **Uniform Selection**. Switch to equal-probability selection with `weighted(false)` — every city has the same chance regardless of population.
 
 - **Multi-Instance Support**. Construct independent `cg` instances with their own data and random engine — ideal for embedding inside other generators.
 
@@ -78,6 +83,11 @@ auto replay = cg::instance().get_city(seeded.seed());
 cg::instance().seed(100);
 // ... generate cities ...
 cg::instance().unseed(); // restore non-deterministic state
+
+// Switch to uniform random selection (equal probability).
+cg::instance().weighted(false);
+auto uniform_city = cg::instance().get_city();  // any city equally likely
+cg::instance().weighted(true);  // restore population-weighted
 
 // Independent instance — separate data and random engine.
 cg my_gen;

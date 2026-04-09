@@ -13,6 +13,7 @@ This guide covers every feature of the city-generator library in detail. For a q
 <li><a href="#city-fields">City Fields</a></li>
 <li><a href="#country-filtering">Country Filtering</a></li>
 <li><a href="#population-weighting">Population Weighting</a></li>
+<li><a href="#uniform-selection">Uniform Selection</a></li>
 <li><a href="#seeding-and-deterministic-generation">Seeding and Deterministic Generation</a></li>
 <li><a href="#multi-instance-support">Multi-Instance Support</a></li>
 <li><a href="#data-pipeline">Data Pipeline</a></li>
@@ -146,10 +147,37 @@ Throws `std::invalid_argument` if no cities match the code.
 
 ## Population Weighting
 
-Cities are selected with probability proportional to their population.
-A city with 1,000,000 inhabitants is ~1000x more likely to be selected
+By default, cities are selected with probability proportional to their population.
+A city with 1,000,000 inhabitants is ~1000× more likely to be selected
 than one with 1,000. Cities with zero population are assigned a minimum
 weight of 1, ensuring they can still appear.
+
+## Uniform Selection
+
+Switch to equal-probability selection where every loaded city has the
+same chance of being picked, regardless of population:
+
+```cpp
+auto& gen = dasmig::cg::instance();
+
+gen.weighted(false);           // uniform random
+auto c = gen.get_city();       // any city equally likely
+auto j = gen.get_city("JP");   // uniform within Japan
+
+gen.weighted(true);            // restore population-weighted (default)
+```
+
+The `weighted()` setter returns `*this` for chaining:
+
+```cpp
+gen.weighted(false).seed(42);  // uniform + deterministic
+```
+
+Query the current mode with:
+
+```cpp
+bool is_weighted = gen.weighted(); // true by default
+```
 
 ## Seeding and Deterministic Generation
 
