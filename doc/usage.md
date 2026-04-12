@@ -17,6 +17,7 @@ This guide covers every feature of the city-generator library in detail. For a q
 <li><a href="#seeding-and-deterministic-generation">Seeding and Deterministic Generation</a></li>
 <li><a href="#multi-instance-support">Multi-Instance Support</a></li>
 <li><a href="#data-pipeline">Data Pipeline</a></li>
+<li><a href="#admin1-code-resolution">Admin1 Code Resolution</a></li>
 <li><a href="#thread-safety">Thread Safety</a></li>
 <li><a href="#error-reference">Error Reference</a></li>
 </ul>
@@ -257,6 +258,40 @@ python scripts/prepare_geonames.py --tier lite # lite only (~25k cities)
 This produces `resources/full/cities.tsv` and `resources/lite/cities.tsv`.
 
 The GeoNames data is licensed under CC BY 4.0. See `LICENSE_DATA.txt`.
+
+## Admin1 Code Resolution
+
+Cities include a raw `admin1_code` field (e.g. `"CA"`, `"08"`) that maps
+to a first-level administrative division (state, province, region). These
+codes are opaque identifiers. To display human-readable names, load the
+GeoNames `admin1CodesASCII.txt` mapping file:
+
+```cpp
+auto& gen = dasmig::cg::instance();
+gen.load_admin1("resources/admin1CodesASCII.txt");
+```
+
+Then resolve codes for any city:
+
+```cpp
+auto c = gen.get_city("US");
+std::string state = gen.resolve_admin1(c.country_code, c.admin1_code);
+// e.g. "California" instead of "CA"
+```
+
+If no mapping exists for a code, `resolve_admin1()` returns the raw code
+as a fallback. An empty `admin1_code` returns an empty string.
+
+Check whether mappings have been loaded:
+
+```cpp
+if (gen.has_admin1())
+    std::cout << gen.resolve_admin1("US", "NY") << "\n"; // "New York"
+```
+
+The mapping file is tab-separated with four columns:
+`CC.CODE \t Name \t ASCII_Name \t GeoNameID`. Download it from
+[GeoNames](https://download.geonames.org/export/dump/admin1CodesASCII.txt).
 
 ## Thread Safety
 

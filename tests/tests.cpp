@@ -550,3 +550,119 @@ TEST_CASE("weighted toggle is chainable", "[weighting]")
     REQUIRE(&ref == &gen);
     gen.weighted(true);
 }
+
+// ---------------------------------------------------------------------------
+// Admin1 code resolution
+// ---------------------------------------------------------------------------
+
+TEST_CASE("has_admin1 - false before load", "[admin1]")
+{
+    dasmig::cg gen;
+    REQUIRE_FALSE(gen.has_admin1());
+}
+
+TEST_CASE("load_admin1 - loads mappings from file", "[admin1]")
+{
+    auto tmp = std::filesystem::temp_directory_path() / "admin1_test.txt";
+    {
+        std::ofstream f{tmp};
+        f << "US.CA\tCalifornia\tCalifornia\t5332921\n";
+        f << "US.NY\tNew York\tNew York\t5128638\n";
+        f << "DE.07\tNorth Rhine-Westphalia\tNorth Rhine-Westphalia\t2861876\n";
+    }
+
+    dasmig::cg gen;
+    gen.load_admin1(tmp);
+    REQUIRE(gen.has_admin1());
+
+    std::filesystem::remove(tmp);
+}
+
+TEST_CASE("load_admin1 - non-existent path is a no-op", "[admin1]")
+{
+    dasmig::cg gen;
+    gen.load_admin1("does_not_exist.txt");
+    REQUIRE_FALSE(gen.has_admin1());
+}
+
+TEST_CASE("resolve_admin1 - returns name for known code", "[admin1]")
+{
+    auto tmp = std::filesystem::temp_directory_path() / "admin1_resolve.txt";
+    {
+        std::ofstream f{tmp};
+        f << "US.CA\tCalifornia\tCalifornia\t5332921\n";
+        f << "JP.40\tTokyo\tTokyo\t1850144\n";
+    }
+
+    dasmig::cg gen;
+    gen.load_admin1(tmp);
+
+    REQUIRE(gen.resolve_admin1("US", "CA") == "California");
+    REQUIRE(gen.resolve_admin1("JP", "40") == "Tokyo");
+
+    std::filesystem::remove(tmp);
+}
+
+TEST_CASE("resolve_admin1 - falls back to raw code for unknown", "[admin1]")
+{
+    auto tmp = std::filesystem::temp_directory_path() / "admin1_fallback.txt";
+    {
+        std::ofstream f{tmp};
+        f << "US.CA\tCalifornia\tCalifornia\t5332921\n";
+    }
+
+    dasmig::cg gen;
+    gen.load_admin1(tmp);
+
+    // Unknown code in known country.
+    REQUIRE(gen.resolve_admin1("US", "ZZ") == "ZZ");
+    // Unknown country entirely.
+    REQUIRE(gen.resolve_admin1("XX", "01") == "01");
+
+    std::filesystem::remove(tmp);
+}
+
+TEST_CASE("resolve_admin1 - empty code returns empty string", "[admin1]")
+{
+    dasmig::cg gen;
+    REQUIRE(gen.resolve_admin1("US", "").empty());
+}
+
+TEST_CASE("load_admin1 - skips malformed lines", "[admin1]")
+{
+    auto tmp = std::filesystem::temp_directory_path() / "admin1_bad.txt";
+    {
+        std::ofstream f{tmp};
+        f << "US.CA\tCalifornia\tCalifornia\t5332921\n";
+        f << "no_tab_here\n";
+        f << "\n";
+        f << "DE.07\tNorth Rhine-Westphalia\tNorth Rhine-Westphalia\t2861876\n";
+    }
+
+    dasmig::cg gen;
+    gen.load_admin1(tmp);
+    REQUIRE(gen.has_admin1());
+
+    // Good lines are loaded; bad lines are skipped.
+    REQUIRE(gen.resolve_admin1("US", "CA") == "California");
+    REQUIRE(gen.resolve_admin1("DE", "07") == "North Rhine-Westphalia");
+
+    std::filesystem::remove(tmp);
+}
+
+TEST_CASE("load_admin1 - handles CRLF line endings", "[admin1]")
+{
+    auto tmp = std::filesystem::temp_directory_path() / "admin1_crlf.txt";
+    {
+        std::ofstream f{tmp, std::ios::binary};
+        f << "BR.27\tSão Paulo\tSao Paulo\t3448433\r\n";
+        f << "BR.21\tRio de Janeiro\tRio de Janeiro\t3451189\r\n";
+    }
+
+    dasmig::cg gen;
+    gen.load_admin1(tmp);
+    REQUIRE(gen.resolve_admin1("BR", "27") == "São Paulo");
+    REQUIRE(gen.resolve_admin1("BR", "21") == "Rio de Janeiro");
+
+    std::filesystem::remove(tmp);
+}

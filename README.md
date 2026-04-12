@@ -31,6 +31,8 @@
 
 - **Multi-Instance Support**. Construct independent `cg` instances with their own data and random engine — ideal for embedding inside other generators.
 
+- **Admin1 Code Resolution**. Translate raw admin1 codes (e.g. `"CA"`, `"08"`) into human-readable state/province names using the GeoNames `admin1CodesASCII.txt` mapping.
+
 ## Integration
 
 [`citygen.hpp`](https://github.com/dasmig/city-generator/blob/master/dasmig/citygen.hpp) is the single required file [released here](https://github.com/dasmig/city-generator/releases). You need to add
