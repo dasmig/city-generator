@@ -298,6 +298,77 @@ class cg
         return _weighted;
     }
 
+    /// @brief Load admin1 code-to-name mappings from a GeoNames
+    ///        admin1CodesASCII.txt file.
+    ///
+    /// Each line has tab-separated fields:
+    ///   CC.CODE \t Name \t ASCII_Name \t GeoNameID
+    ///
+    /// After loading, resolve_admin1() can translate raw admin1 codes
+    /// into human-readable names. Safe to call multiple times.
+    ///
+    /// @param path Path to admin1CodesASCII.txt.
+    void load_admin1(const std::filesystem::path& path)
+    {
+        if (!std::filesystem::is_regular_file(path))
+            return;
+
+        std::ifstream file{path};
+        if (!file.is_open())
+            return;
+
+        std::string line;
+        while (std::getline(file, line))
+        {
+            if (line.empty())
+                continue;
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
+
+            // Split on first two tabs: key \t name \t ...
+            auto t1 = line.find('\t');
+            if (t1 == std::string::npos)
+                continue;
+            auto t2 = line.find('\t', t1 + 1);
+            if (t2 == std::string::npos)
+                t2 = line.size();
+
+            auto key = line.substr(0, t1);   // "CC.CODE"
+            auto name = line.substr(t1 + 1, t2 - t1 - 1);
+            _admin1_names[key] = name;
+        }
+    }
+
+    /// @brief Resolve an admin1 code to a human-readable name.
+    ///
+    /// Looks up the combination of country_code and admin1_code
+    /// (e.g., "US" + "CA" → "California") in the loaded admin1 mapping.
+    /// Returns the raw code if no match is found.
+    ///
+    /// @param country_code ISO-3166 two-letter country code.
+    /// @param admin1_code  GeoNames first-level administrative code.
+    /// @return The admin1 name, or the raw code if not mapped.
+    [[nodiscard]] std::string resolve_admin1(
+        const std::string& country_code,
+        const std::string& admin1_code) const
+    {
+        if (admin1_code.empty())
+            return {};
+
+        auto key = country_code + "." + admin1_code;
+        auto it = _admin1_names.find(key);
+        if (it != _admin1_names.end())
+            return it->second;
+        return admin1_code;
+    }
+
+    /// @brief Check whether admin1 name mappings have been loaded.
+    /// @return `true` if at least one mapping is available.
+    [[nodiscard]] bool has_admin1() const
+    {
+        return !_admin1_names.empty();
+    }
+
     /// @brief Check whether any city data has been loaded.
     /// @return `true` if at least one city is available.
     [[nodiscard]] bool has_data() const
@@ -397,6 +468,9 @@ class cg
   private:
     // All loaded cities.
     std::vector<city> _cities;
+
+    // Admin1 code-to-name mapping ("CC.CODE" → name).
+    std::unordered_map<std::string, std::string> _admin1_names;
 
     // Population-weighted distribution over _cities indices.
     mutable std::discrete_distribution<std::size_t> _distribution;
