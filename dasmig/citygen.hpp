@@ -26,11 +26,14 @@ namespace dasmig
 {
 
 /// @brief Dataset size tier for resource loading.
+#ifndef DASMIG_DATASET_DEFINED
+#define DASMIG_DATASET_DEFINED
 enum class dataset : std::uint8_t
 {
     lite, ///< ~25k major cities (population >= 15,000).
     full  ///< ~200k cities (population >= 500).
 };
+#endif
 
 /// @brief Return type for city generation, holding all GeoNames fields.
 ///
