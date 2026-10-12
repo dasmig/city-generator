@@ -24,5 +24,3 @@ WarningsAsErrors: ''
 HeaderFilterRegex: 'dasmig/.*\.hpp'
 ExtraArgs: ['-std=c++23']
 FormatStyle: file
-
-FormatStyle: file
