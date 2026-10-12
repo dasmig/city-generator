@@ -2,7 +2,7 @@
 # Run: doxygen Doxyfile
 
 PROJECT_NAME           = "City Generator"
-PROJECT_NUMBER         = 1.0.1
+PROJECT_NUMBER         = 1.1.1
 PROJECT_BRIEF          = "Procedural city generation for C++23"
 PROJECT_LOGO           = doc/city-generator.png
 
