@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 // ---------------------------------------------------------------------------
@@ -193,8 +194,8 @@ TEST_CASE("multiple loads accumulate data", "[loading]")
     if (gen.has_data())
     {
         auto count1 = gen.city_count();
-        gen.load(dasmig::dataset::lite);
-        REQUIRE(gen.city_count() >= count1);
+        (void)gen.load(dasmig::dataset::lite);
+        REQUIRE(gen.city_count() == count1); // loading again replaces
     }
 }
 
@@ -202,7 +203,7 @@ TEST_CASE("multiple loads accumulate data", "[loading]")
 // Malformed input handling
 // ---------------------------------------------------------------------------
 
-TEST_CASE("load - skips malformed lines", "[loading]")
+TEST_CASE("load - a malformed line is an error with its location", "[loading]")
 {
     // Create a temp file with a header plus one good and one bad line.
     auto tmp = std::filesystem::temp_directory_path() / "citygen_test.tsv";
@@ -218,17 +219,42 @@ TEST_CASE("load - skips malformed lines", "[loading]")
     }
 
     dasmig::cg gen;
-    gen.load(tmp);
-    // The good line (geonameid=123) loads; the bad line is skipped;
-    // the zero-id line is also skipped.
-    REQUIRE(gen.city_count() == 1);
+    try
+    {
+        gen.load(tmp);
+        FAIL("expected core::tsv_error");
+    }
+    catch (const dasmig::core::tsv_error& e)
+    {
+        REQUIRE(e.line() == 3); // the line with too few fields
+    }
+    REQUIRE_FALSE(gen.has_data()); // nothing was loaded
 
+    // Without the bad lines the good one loads.
+    {
+        std::ofstream f{tmp};
+        f << "geonameid\tname\tasciiname\tlatitude\tlongitude\tfeature_code\t"
+             "country_code\tcc2\tadmin1_code\tadmin2_code\tadmin3_code\t"
+             "admin4_code\tpopulation\televation\tdem\ttimezone\n";
+        f << "123\tTestCity\tTestCity\t10.0\t20.0\tPPL\tXX\t\t01\t\t\t\t"
+             "5000\t100\t110\tEurope/London\n";
+    }
+    gen.load(tmp);
+    REQUIRE(gen.city_count() == 1);
     auto c = gen.get_city(42);
     REQUIRE(c.name == "TestCity");
     REQUIRE(c.country_code == "XX");
     REQUIRE(c.population == 5000);
     REQUIRE(c.elevation == 100);
     REQUIRE(c.dem == 110);
+
+    // A geonameid of 0 is not valid.
+    {
+        std::ofstream f{tmp, std::ios::app};
+        f << "0\tBadId\tBadId\t0\t0\tPPL\tYY\t\t\t\t\t\t0\t0\t0\tUTC\n";
+    }
+    REQUIRE_THROWS_AS(gen.load(tmp), dasmig::core::tsv_error);
+    REQUIRE(gen.city_count() == 1); // unchanged
 
     std::filesystem::remove(tmp);
 }
@@ -248,7 +274,7 @@ TEST_CASE("load - handles empty file (header only)", "[loading]")
     std::filesystem::remove(tmp);
 }
 
-TEST_CASE("load - handles zero-byte file", "[loading]")
+TEST_CASE("load - a zero-byte file is an error", "[loading]")
 {
     auto tmp = std::filesystem::temp_directory_path() / "citygen_zero.tsv";
     {
@@ -256,7 +282,7 @@ TEST_CASE("load - handles zero-byte file", "[loading]")
     }
 
     dasmig::cg gen;
-    gen.load(tmp);
+    REQUIRE_THROWS_AS(gen.load(tmp), dasmig::core::tsv_error); // no header line
     REQUIRE_FALSE(gen.has_data());
 
     std::filesystem::remove(tmp);
@@ -308,7 +334,7 @@ TEST_CASE("load - skips empty lines in body", "[loading]")
     std::filesystem::remove(tmp);
 }
 
-TEST_CASE("load - parse exception marks line as invalid", "[loading]")
+TEST_CASE("load - a non-numeric id is an error", "[loading]")
 {
     auto tmp = std::filesystem::temp_directory_path() / "citygen_bad_num.tsv";
     {
@@ -322,7 +348,16 @@ TEST_CASE("load - parse exception marks line as invalid", "[loading]")
     }
 
     dasmig::cg gen;
-    gen.load(tmp);
+    try
+    {
+        gen.load(tmp);
+        FAIL("expected core::tsv_error");
+    }
+    catch (const dasmig::core::tsv_error& e)
+    {
+        REQUIRE(e.line() == 2);
+        REQUIRE(e.column() == "geonameid");
+    }
     REQUIRE(gen.city_count() == 0);
 
     std::filesystem::remove(tmp);
@@ -443,6 +478,7 @@ TEST_CASE("load(dataset::lite) loads fewer cities than full", "[loading][tier]")
     }
 }
 
+#ifndef DASMIG_CITY_EMBED // compiled-in data is never missing
 TEST_CASE("load(dataset) returns false for missing tier", "[loading][tier]")
 {
     dasmig::cg gen;
@@ -459,6 +495,7 @@ TEST_CASE("load(dataset) returns false for missing tier", "[loading][tier]")
     std::filesystem::current_path(old_cwd);
     std::filesystem::remove_all(tmp);
 }
+#endif
 
 // ---------------------------------------------------------------------------
 // Country index cache — consistency
@@ -628,7 +665,7 @@ TEST_CASE("resolve_admin1 - empty code returns empty string", "[admin1]")
     REQUIRE(gen.resolve_admin1("US", "").empty());
 }
 
-TEST_CASE("load_admin1 - skips malformed lines", "[admin1]")
+TEST_CASE("load_admin1 - a malformed line is an error", "[admin1]")
 {
     auto tmp = std::filesystem::temp_directory_path() / "admin1_bad.txt";
     {
@@ -640,12 +677,17 @@ TEST_CASE("load_admin1 - skips malformed lines", "[admin1]")
     }
 
     dasmig::cg gen;
-    gen.load_admin1(tmp);
-    REQUIRE(gen.has_admin1());
-
-    // Good lines are loaded; bad lines are skipped.
-    REQUIRE(gen.resolve_admin1("US", "CA") == "California");
-    REQUIRE(gen.resolve_admin1("DE", "07") == "North Rhine-Westphalia");
+    try
+    {
+        gen.load_admin1(tmp);
+        FAIL("expected core::tsv_error");
+    }
+    catch (const dasmig::core::tsv_error& e)
+    {
+        REQUIRE(e.line() == 2); // "no_tab_here" is not COUNTRY.CODE
+        REQUIRE(e.column() == "code");
+    }
+    REQUIRE_FALSE(gen.has_admin1()); // nothing was loaded
 
     std::filesystem::remove(tmp);
 }
@@ -666,3 +708,162 @@ TEST_CASE("load_admin1 - handles CRLF line endings", "[admin1]")
 
     std::filesystem::remove(tmp);
 }
+
+// ---------------------------------------------------------------------------
+// Known answers (rule 2): the same seed and data give these exact results on
+// every compiler and platform. A change here is a change of output and needs
+// a major version.
+// ---------------------------------------------------------------------------
+
+namespace
+{
+
+dasmig::cg load_lite_file()
+{
+    dasmig::cg gen;
+    for (const char* path : {"resources/lite/cities.tsv", "../resources/lite/cities.tsv"})
+    {
+        if (std::filesystem::is_regular_file(path))
+        {
+            gen.load(std::filesystem::path{path});
+            break;
+        }
+    }
+    REQUIRE(gen.has_data());
+    return gen;
+}
+
+const std::string city_header =
+    "geonameid\tname\tasciiname\tlatitude\tlongitude\tfeature_code\tcountry_code\tcc2\t"
+    "admin1_code\tadmin2_code\tadmin3_code\tadmin4_code\tpopulation\televation\tdem\ttimezone\n";
+
+std::string city_row(std::string_view id, std::string_view name, std::string_view country,
+                     std::string_view population)
+{
+    return std::string{id} + "\t" + std::string{name} + "\t" + std::string{name} +
+           "\t10.5\t20.25\tPPL\t" + std::string{country} + "\t\t01\t\t\t\t" + std::string{population} +
+           "\t\t5\tUTC\n";
+}
+
+} // namespace
+
+TEST_CASE("known answers for fixed seeds", "[kat]")
+{
+    auto gen = load_lite_file();
+    REQUIRE(gen.data_hash() == 0x7e8af51013ede34aULL);
+
+    REQUIRE(gen.get_city(std::uint64_t{1}).to_json() ==
+            R"({"geonameid":953781,"name":"Soweto","asciiname":"Soweto","latitude":-26.26781,)"
+            R"("longitude":27.85849,"feature_code":"PPL","country_code":"ZA","cc2":"","admin1_code":"06",)"
+            R"("admin2_code":"JHB","admin3_code":"JHB","admin4_code":"","population":1695047,)"
+            R"("elevation":null,"dem":1632,"timezone":"Africa/Johannesburg",)"
+            R"("signature":{"seed":"0000000000000001","data":"7e8af51013ede34a"}})");
+    REQUIRE(gen.get_city("BR", std::uint64_t{3}).geonameid == 3470127);
+    gen.weighted(false);
+    REQUIRE(gen.get_city(std::uint64_t{2}).geonameid == 3446019);
+    REQUIRE(gen.get_city("JP", std::uint64_t{4}).geonameid == 2112802);
+    gen.weighted(true);
+
+    std::uint64_t h = 0xcbf29ce484222325ULL;
+    for (std::uint64_t s = 0; s < 10000; ++s)
+    {
+        for (const char c : gen.get_city(s).to_json())
+        {
+            h ^= static_cast<unsigned char>(c);
+            h *= 0x100000001b3ULL;
+        }
+    }
+    REQUIRE(h == 0x792f3ef7e0e4fd8cULL);
+}
+
+// ---------------------------------------------------------------------------
+// JSON and signatures
+// ---------------------------------------------------------------------------
+
+TEST_CASE("to_json and signature", "[json]")
+{
+    dasmig::cg gen;
+    gen.extend_from_string(city_header + city_row("101", "Alpha", "XX", "1000"), "one.tsv",
+                           dasmig::core::layer_mode::replace);
+    const auto c = gen.get_city(std::uint64_t{5});
+    REQUIRE(c.seed() == 5);
+    REQUIRE(c.signature().data == gen.data_hash());
+    REQUIRE(c.to_json() ==
+            R"({"geonameid":101,"name":"Alpha","asciiname":"Alpha","latitude":10.5,"longitude":20.25,)"
+            R"("feature_code":"PPL","country_code":"XX","cc2":"","admin1_code":"01","admin2_code":"",)"
+            R"("admin3_code":"","admin4_code":"","population":1000,"elevation":null,"dem":5,"timezone":"UTC",)"
+            R"("signature":{"seed":"0000000000000005","data":")" +
+                dasmig::core::seed_signature{.seed = 0, .data = gen.data_hash()}.to_string().substr(17) +
+                R"("}})");
+}
+
+// ---------------------------------------------------------------------------
+// Extending data (rule 8)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("extend adds, overrides and removes cities", "[extend]")
+{
+    auto gen = load_lite_file();
+    const auto count = gen.city_count();
+    const auto base_hash = gen.data_hash();
+
+    // A new city in a new country, and Soweto renamed.
+    const auto& info = gen.extend_from_string(
+        city_header + city_row("101", "Atlantis City", "QQ", "500000") +
+            city_row("953781", "Soweto Renamed", "ZA", "1695047"),
+        "atlantis.tsv");
+    REQUIRE(info.added == 1);
+    REQUIRE(info.replaced == 1);
+    REQUIRE(gen.city_count() == count + 1);
+    REQUIRE(gen.get_city("QQ").name == "Atlantis City");
+    REQUIRE(gen.get_city(std::uint64_t{1}).name == "Soweto Renamed"); // same draw, new data
+    REQUIRE(gen.data_hash() != base_hash);
+
+    gen.extend_from_string("geonameid\tdisabled\n101\t1\n", "sink.tsv");
+    REQUIRE(gen.city_count() == count);
+    REQUIRE_THROWS_AS(gen.get_city("QQ"), std::invalid_argument);
+
+    gen.load(std::filesystem::path{gen.layers().front().source});
+    REQUIRE(gen.data_hash() == base_hash);
+}
+
+TEST_CASE("a bad layer is rejected and leaves the data unchanged", "[extend][errors]")
+{
+    auto gen = load_lite_file();
+    const auto hash = gen.data_hash();
+    const auto count = gen.city_count();
+
+    REQUIRE_THROWS_WITH(gen.extend_from_string(city_header + city_row("101", "X", "QQ", "lots"), "bad.tsv"),
+                        "bad.tsv:2: column 'population': expected a number, got 'lots'");
+    REQUIRE_THROWS_WITH(gen.extend_from_string(city_header + city_row("0", "X", "QQ", "5"), "zero.tsv"),
+                        "zero.tsv:2: column 'geonameid': must be positive");
+    std::string bad_elevation = city_header + city_row("101", "X", "QQ", "5");
+    bad_elevation.replace(bad_elevation.find("\t\t5\tUTC"), 7, "\t99999\t5\tUTC");
+    REQUIRE_THROWS_AS(gen.extend_from_string(bad_elevation, "elev.tsv"), dasmig::core::tsv_error);
+    REQUIRE_THROWS_AS(gen.extend_from_string(city_header + city_row("953781", "X", "ZA", "5"), "clash.tsv",
+                                             dasmig::core::layer_mode::add),
+                      dasmig::core::tsv_error);
+
+    REQUIRE(gen.data_hash() == hash);
+    REQUIRE(gen.city_count() == count);
+    REQUIRE(gen.layers().size() == 1);
+}
+
+#ifdef DASMIG_CITY_EMBED
+TEST_CASE("compiled-in data needs no files and matches them", "[embed]")
+{
+    const auto old_cwd = std::filesystem::current_path();
+    const auto tmp = std::filesystem::temp_directory_path() / "cg_embed_dir";
+    std::filesystem::create_directories(tmp);
+    std::filesystem::current_path(tmp);
+    dasmig::cg gen;
+    const bool loaded = gen.load(dasmig::dataset::lite);
+    std::filesystem::current_path(old_cwd);
+    std::filesystem::remove_all(tmp);
+
+    REQUIRE(loaded);
+    REQUIRE(gen.layers().front().source == "embedded:lite/cities.tsv");
+    REQUIRE(gen.data_hash() == 0x7e8af51013ede34aULL); // same as the file
+    REQUIRE(gen.get_city(std::uint64_t{1}).geonameid == 953781);
+}
+#endif

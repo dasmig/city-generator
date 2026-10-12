@@ -13,7 +13,7 @@
 [![Platform](https://img.shields.io/badge/platform-linux%20|%20windows%20|%20macos-lightgrey.svg)](https://github.com/dasmig/city-generator)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue.svg)](https://dasmig.github.io/city-generator/)
 
-**[API Reference](https://dasmig.github.io/city-generator/)** · **[Usage Guide](doc/usage.md)** · **[Releases](https://github.com/dasmig/city-generator/releases)**
+**[API Reference](https://dasmig.github.io/city-generator/)** · **[Usage Guide](doc/usage.md)** · **[Data and Method](doc/data.md)** · **[Releases](https://github.com/dasmig/city-generator/releases)**
 
 ## Features
 
@@ -23,11 +23,19 @@
 
 - **Country Filtering**. Generate cities from a specific country with `get_city("BR")`.
 
-- **GeoNames Data**. Ships with two dataset tiers — *full* (~200k cities, pop ≥ 500) and *lite* (~25k major cities, pop ≥ 15,000) — from GeoNames, licensed under CC BY 4.0.
+- **GeoNames Data**. Ships with two dataset tiers — *full* (231,224 cities, pop ≥ 500) and *lite* (33,521 major cities, pop ≥ 15,000) — from GeoNames, licensed under CC BY 4.0.
 
 - **Deterministic Seeding**. Per-call `get_city(seed)` for reproducible results, generator-level `seed()` / `unseed()` for deterministic sequences, and `city::seed()` for replaying a previous generation.
 
 - **Uniform Selection**. Switch to equal-probability selection with `weighted(false)` — every city has the same chance regardless of population.
+
+- **Identical Everywhere**. A seed gives the same city on every compiler, standard library and CPU (GCC, Clang, MSVC, Emscripten; x86-64 and ARM64), checked by known-answer tests.
+
+- **Extensible Data**. Load your own TSV layers on top of the shipped data to add, change or remove cities (`extend()`), checked before they are applied.
+
+- **JSON and Replay**. `to_json()` on every result, and a `signature()` recording the seed and the data it came from.
+
+- **Compiled-in Data**. Define `DASMIG_CITY_EMBED` to build the `lite` tier into the program, for WebAssembly and other builds without files.
 
 - **Multi-Instance Support**. Construct independent `cg` instances with their own data and random engine — ideal for embedding inside other generators.
 
@@ -35,7 +43,7 @@
 
 ## Integration
 
-[`citygen.hpp`](https://github.com/dasmig/city-generator/blob/master/dasmig/citygen.hpp) is the single required file [released here](https://github.com/dasmig/city-generator/releases). You need to add
+[`citygen.hpp`](https://github.com/dasmig/city-generator/blob/master/dasmig/citygen.hpp) is the library [released here](https://github.com/dasmig/city-generator/releases). Keep [`core.hpp`](https://github.com/dasmig/city-generator/blob/master/dasmig/core.hpp) and the [`core/`](https://github.com/dasmig/city-generator/tree/master/dasmig/core) directory ([dasmig-core](https://github.com/dasmig/dasmig-core)) in the same directory, and add
 
 ```cpp
 #include <dasmig/citygen.hpp>
@@ -58,9 +66,9 @@ Additionally you must supply the city generator with the [`resources`](https://g
 using cg = dasmig::cg;
 
 // Manually load a specific dataset tier if necessary.
-cg::instance().load(dasmig::dataset::lite);  // ~25k major cities
+cg::instance().load(dasmig::dataset::lite);  // 33,521 major cities
 // OR
-cg::instance().load(dasmig::dataset::full);  // ~200k cities
+cg::instance().load(dasmig::dataset::full);  // 231,224 cities
 
 // Generate a random city (population-weighted).
 auto city = cg::instance().get_city();
@@ -105,8 +113,8 @@ The city data is sourced from the [GeoNames](https://www.geonames.org/) geograph
 
 | Tier | Source | Cities |
 |------|--------|--------|
-| full | `cities500.zip` | ~200k (pop ≥ 500) |
-| lite | `cities15000.zip` | ~25k (pop ≥ 15,000) |
+| full | `cities500.zip` | 231,224 (pop ≥ 500) |
+| lite | `cities15000.zip` | 33,521 (pop ≥ 15,000) |
 
 The data is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). See `LICENSE_DATA.txt` for details.
 
