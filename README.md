@@ -56,6 +56,27 @@ to the files you want to generate cities and set the necessary switches to enabl
 
 Additionally you must supply the city generator with the [`resources`](https://github.com/dasmig/city-generator/tree/master/resources) folder containing `full/cities.tsv` and/or `lite/cities.tsv`, also available in the [release](https://github.com/dasmig/city-generator/releases).
 
+## Build and Test
+
+Run the following commands from the repository root with GNU Make, a Unix-like shell, and a C++23 compiler and standard library. The Makefile defaults to `clang++`; Linux CI uses LLVM 18 and libstdc++ 14.
+
+```bash
+make all        # build the example
+./build/example # run the example
+make test       # build and run the tests
+make test-embed # build and run the tests with the lite tier compiled in
+```
+
+Binaries are written to `build/`. Keep the checked-in `resources/` folder available for the example and file-backed tests. To use a different compiler, override `CXX`, for example: `make test CXX=g++-14`.
+
+To generate coverage reports with Clang, also install `llvm-profdata` and `llvm-cov`, then run:
+
+```bash
+make coverage
+```
+
+The HTML report is written to `coverage/index.html`.
+
 ## Usage
 
 ```cpp
