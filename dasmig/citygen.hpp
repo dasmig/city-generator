@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <ostream>
 #include <span>
 #include <stdexcept>
@@ -29,6 +30,17 @@ DASMIG_CORE_REQUIRE(1, 0);
 
 namespace dasmig
 {
+
+/// @brief Per-call city selection options, independent of cg::weighted().
+struct city_request
+{
+    /// @brief ISO-3166 two-letter country code, or no filter when absent.
+    /// An explicit empty or unknown code is an error if no cities match.
+    std::optional<std::string> country{std::nullopt};
+
+    /// @brief Population-weighted selection (default); false selects uniformly.
+    bool weighted{true};
+};
 
 /// @brief Return type for city generation, holding all GeoNames fields.
 ///
@@ -88,6 +100,7 @@ class city
     /// @brief Retrieve the random seed used to generate this city.
     /// @return The per-call seed for replay.
     /// @see cg::get_city(std::uint64_t)
+    /// @see cg::get_city(std::uint64_t, const city_request&)
     [[nodiscard]] std::uint64_t seed() const
     {
         return _signature.seed;
@@ -212,8 +225,8 @@ class cg
 
     /// @brief Generate a random city.
     ///
-    /// By default, selection is population-weighted. Call weighted(false)
-    /// to switch to uniform random selection.
+    /// Compatibility overload using the mode set by weighted() (weighted
+    /// by default). Use get_city(seed, request) for explicit per-call options.
     /// @return A city object with all fields.
     /// @throws std::runtime_error If no data has been loaded.
     [[nodiscard]] city get_city()
@@ -227,11 +240,7 @@ class cg
     /// @throws std::runtime_error If no data has been loaded.
     [[nodiscard]] city get_city(std::uint64_t call_seed) const
     {
-        require_data_();
-        auto r = core::rng{call_seed}.split("city");
-        const auto idx = _weighted ? _distribution(r)
-                                   : static_cast<std::size_t>(core::bounded(r, _cities.size()));
-        return result_(_cities[idx], call_seed);
+        return get_city(call_seed, city_request{.weighted = _weighted});
     }
 
     /// @brief Generate a random city filtered by country.
@@ -253,15 +262,39 @@ class cg
     [[nodiscard]] city get_city(const std::string& country,
                                 std::uint64_t call_seed) const
     {
+        return get_city(call_seed, city_request{.country = country, .weighted = _weighted});
+    }
+
+    /// @brief Generate a deterministic city with explicit per-call options.
+    ///
+    /// Request defaults select globally with population weighting, regardless
+    /// of weighted(). Neither that setting nor the internal engine is changed.
+    /// Replay requires the same seed, request and loaded data.
+    ///
+    /// @param call_seed Seed for reproducible results.
+    /// @param request Country filter and selection mode for this call only.
+    /// @return A city object with all fields and its replay signature.
+    /// @throws std::runtime_error If no data has been loaded.
+    /// @throws std::invalid_argument If no cities match the requested country.
+    [[nodiscard]] city get_city(std::uint64_t call_seed,
+                                const city_request& request) const
+    {
         require_data_();
-        const auto it = _country_index.find(country);
+        auto r = core::rng{call_seed}.split("city");
+        if (!request.country)
+        {
+            const auto idx = request.weighted
+                                 ? _distribution(r)
+                                 : static_cast<std::size_t>(core::bounded(r, _cities.size()));
+            return result_(_cities[idx], call_seed);
+        }
+        const auto it = _country_index.find(*request.country);
         if (it == _country_index.end())
         {
-            throw std::invalid_argument("No cities found for country code: " + country);
+            throw std::invalid_argument("No cities found for country code: " + *request.country);
         }
         const auto& entry = it->second;
-        auto r = core::rng{call_seed}.split("city");
-        const auto selected = _weighted
+        const auto selected = request.weighted
                                   ? entry.distribution(r)
                                   : static_cast<std::size_t>(core::bounded(r, entry.indices.size()));
         return result_(_cities[entry.indices[selected]], call_seed);
@@ -291,7 +324,8 @@ class cg
 
     /// @}
 
-    /// @brief Set whether generation is population-weighted or uniform.
+    /// @brief Set the compatibility mode for the simple get_city() overloads.
+    /// Explicit city_request calls are unaffected.
     /// @param enable `true` for weighted (default), `false` for uniform.
     /// @return `*this` for chaining.
     cg& weighted(bool enable)
@@ -300,7 +334,7 @@ class cg
         return *this;
     }
 
-    /// @brief Query whether generation is population-weighted.
+    /// @brief Query the compatibility mode for the simple get_city() overloads.
     /// @return `true` if weighted (default), `false` if uniform.
     [[nodiscard]] bool weighted() const
     {

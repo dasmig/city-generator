@@ -10,6 +10,7 @@ This guide covers every feature of the city-generator library in detail. For a q
 <li><a href="#installation">Installation</a></li>
 <li><a href="#loading-resources">Loading Resources</a></li>
 <li><a href="#generating-cities">Generating Cities</a></li>
+<li><a href="#per-call-requests">Per-Call Requests</a></li>
 <li><a href="#city-fields">City Fields</a></li>
 <li><a href="#country-filtering">Country Filtering</a></li>
 <li><a href="#population-weighting">Population Weighting</a></li>
@@ -106,6 +107,47 @@ auto c = dasmig::cg::instance().get_city("US");
 // c.country_code == "US"
 ```
 
+## Per-Call Requests
+
+Use the seeded overload `get_city(seed, request)` to select a country and
+weighting mode for one call, without changing the generator's settings:
+
+```cpp
+auto& gen = dasmig::cg::instance();
+const dasmig::city_request request{.country = "BR", .weighted = false};
+auto c = gen.get_city(42, request);  // uniform within Brazil
+auto replay = gen.get_city(c.seed(), request);
+// replay.to_json() == c.to_json() with the same loaded data
+```
+
+| Field | Type | Default | Meaning |
+|-------|------|---------|---------|
+| `country` | `std::optional<std::string>` | `std::nullopt` | No country filter; set a code such as `"BR"` to filter |
+| `weighted` | `bool` | `true` | Population-weighted selection; `false` gives every eligible city the same chance |
+
+An explicit empty, unknown or differently cased country code throws
+`std::invalid_argument` if no loaded cities match it. No data loaded throws
+`std::runtime_error` first, just as with the simple overloads.
+
+Request calls are available on a `const cg`, do not advance the internal
+engine, and do not change `weighted()` or retain a country filter. Request
+defaults are independent of the compatibility mode:
+
+```cpp
+gen.weighted(false);
+auto uniform = gen.get_city(42);  // simple overload honors weighted(false)
+auto weighted = gen.get_city(42, dasmig::city_request{});  // globally weighted
+// gen.weighted() is still false.
+gen.weighted(true);
+```
+
+The existing `get_city()`, `get_city(seed)`, `get_city(country)` and
+`get_city(country, seed)` overloads remain compatibility wrappers with the
+same results, errors and generator-level `weighted()` behavior. Explicit
+requests use the same selection algorithm and return the same `city` fields,
+JSON and seed/data signature. Keep the request alongside the seed for replay:
+the signature does not record the country filter or weighting mode.
+
 ## City Fields
 
 Every generated city includes all 16 GeoNames fields:
@@ -147,7 +189,8 @@ auto de = gen.get_city("DE");  // German city
 ```
 
 Country-filtered selection is also population-weighted within the country.
-Throws `std::invalid_argument` if no cities match the code.
+The simple overload honors `weighted()`; explicit requests use their own
+`weighted` field. Throws `std::invalid_argument` if no cities match the code.
 
 ## Population Weighting
 
@@ -158,8 +201,10 @@ weight of 1, ensuring they can still appear.
 
 ## Uniform Selection
 
-Switch to equal-probability selection where every loaded city has the
-same chance of being picked, regardless of population:
+For one call, use `gen.get_city(42, dasmig::city_request{.weighted = false})`.
+For compatibility, switch the simple overloads to equal-probability selection
+where every loaded city has the same chance of being picked, regardless of
+population:
 
 ```cpp
 auto& gen = dasmig::cg::instance();
@@ -171,7 +216,8 @@ auto j = gen.get_city("JP");   // uniform within Japan
 gen.weighted(true);            // restore population-weighted (default)
 ```
 
-The `weighted()` setter returns `*this` for chaining:
+The `weighted()` setter affects only the simple overloads, not explicit
+requests, and returns `*this` for chaining:
 
 ```cpp
 gen.weighted(false).seed(42);  // uniform + deterministic
@@ -197,7 +243,8 @@ auto c = dasmig::cg::instance().get_city(42);
 ### Seed replay
 
 Every city records its seed. Retrieve it with `city::seed()` and pass
-it back to reproduce the exact same result:
+it back with the same data, country filter and weighting mode to reproduce
+the exact same result:
 
 ```cpp
 auto c = dasmig::cg::instance().get_city();
@@ -237,6 +284,10 @@ auto c = gen.get_city("BR", 42);
 > and the seed: `gen.get_city("BR", c.seed())`. Using just `c.seed()`
 > without the country filter will select from the full dataset and likely
 > produce a different city.
+
+For an explicit request, replay with `gen.get_city(c.seed(), request)` using
+the original request. Changing the generator's `weighted()` mode does not
+affect this replay.
 
 ## Multi-Instance Support
 
@@ -379,5 +430,5 @@ concurrent generation, give each thread its own `cg` instance.
 | Exception | Condition |
 |-----------|-----------|
 | `std::runtime_error` | `get_city()` called with no data loaded |
-| `std::invalid_argument` | `get_city(country)` with unknown country code |
+| `std::invalid_argument` | Simple country overloads or `get_city(seed, request)` with a country code that matches no loaded cities (including an explicit empty code) |
 | `dasmig::core::tsv_error` | A malformed `cities.tsv`, layer or admin1 file (message gives file, line and column); the data is unchanged |
