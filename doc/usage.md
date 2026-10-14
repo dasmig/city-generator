@@ -38,7 +38,7 @@ int main()
     auto& gen = dasmig::cg::instance();
 
     // Random city (population-weighted).
-    auto c = gen.get_city();
+    auto c = gen.get_city({});
     std::cout << c.name << ", " << c.country_code << "\n";
 
     // City from a specific country.
@@ -96,7 +96,7 @@ Each `load()` replaces the data loaded before (use `extend()` to add on top; see
 ### Random (population-weighted)
 
 ```cpp
-auto c = dasmig::cg::instance().get_city();
+auto c = dasmig::cg::instance().get_city({});
 std::string text = c;  // implicit conversion — returns the city name
 ```
 
@@ -110,8 +110,8 @@ auto c = dasmig::cg::instance().get_city({.country = "US"});
 ## Per-Call Requests
 
 `get_city(request)` and `get_city(request, seed)` take a `city_request` that
-selects a country and weighting mode for that call. `get_city()` is the same
-as a default request:
+selects a country and weighting mode for that call. Use `{}` for
+the defaults:
 
 ```cpp
 auto& gen = dasmig::cg::instance();
@@ -160,7 +160,7 @@ Every generated city includes all 16 GeoNames fields:
 | `timezone` | `string` | IANA timezone ID |
 
 ```cpp
-auto c = gen.get_city();
+auto c = gen.get_city({});
 std::cout << c.name << " (" << c.country_code << ")\n";
 std::cout << "Coordinates: " << c.latitude << ", " << c.longitude << "\n";
 std::cout << "Population: " << c.population << "\n";
@@ -217,7 +217,7 @@ Every city records its seed. Retrieve it with `city::seed()` and pass
 it back with the same data and request to reproduce the exact same result:
 
 ```cpp
-auto c = dasmig::cg::instance().get_city();
+auto c = dasmig::cg::instance().get_city({});
 auto saved_seed = c.seed();
 
 // Later, replay:
@@ -227,20 +227,19 @@ auto replay = dasmig::cg::instance().get_city({}, saved_seed);
 
 ### Sequence seeding
 
-Seed the generator's engine for a reproducible sequence:
+There is no generator-level `seed()` or `unseed()`. For a reproducible sequence,
+keep a `dasmig::core::rng` in the caller and pass its next value as the seed:
 
 ```cpp
 auto& gen = dasmig::cg::instance();
 
-gen.seed(100);
-auto a = gen.get_city();
-auto b = gen.get_city();
+dasmig::core::rng rng{100};
+auto a = gen.get_city({}, rng());
+auto b = gen.get_city({}, rng());
 
-gen.seed(100);                // reset
-auto a2 = gen.get_city();     // identical to a
-auto b2 = gen.get_city();     // identical to b
-
-gen.unseed(); // restore non-deterministic behavior
+dasmig::core::rng again{100};          // reset
+auto a2 = gen.get_city({}, again());   // identical to a
+auto b2 = gen.get_city({}, again());   // identical to b
 ```
 
 ### Country filter with seed
@@ -262,7 +261,7 @@ Construct independent generators with their own data and engine:
 ```cpp
 dasmig::cg my_gen;
 my_gen.load("path/to/cities.tsv");
-auto c = my_gen.get_city();
+auto c = my_gen.get_city({});
 ```
 
 ## Data Pipeline
@@ -364,6 +363,14 @@ Define `DASMIG_CITY_EMBED` before including the header to compile the `lite` tie
 
 `dasmig/citygen_data.hpp` is generated from `resources/lite` by `make embed`; CI checks it is up to date.
 
+## Migrating from v3
+
+Version 4 makes a request the only way to call `get_city`.
+
+- `get_city()` becomes `get_city({})`; the request argument no longer has a default.
+- `seed(s)` and `unseed()` are removed from the generator. Pass a seed per call, or keep a `dasmig::core::rng` in the caller for a sequence (see "Sequence seeding" above).
+- Results, seeded output and data APIs are unchanged.
+
 ## Migrating from v1
 
 Version 2 moves the library onto [dasmig-core](https://github.com/dasmig/dasmig-core).
@@ -384,9 +391,9 @@ local static for safe initialization.
 | Operation | Thread-safe? |
 |-----------|-------------|
 | `instance()` | Yes (static local) |
-| `get_city()` on **different** instances | Yes |
-| `get_city()` on the **same** instance | **No** — requires external synchronization |
-| `load()`, `extend()`, `load_admin1()` | **No** — must not be called concurrently with `get_city()` on the same instance |
+| `get_city({})` on **different** instances | Yes |
+| `get_city({})` on the **same** instance | **No** — requires external synchronization |
+| `load()`, `extend()`, `load_admin1()` | **No** — must not be called concurrently with `get_city({})` on the same instance |
 
 Call `load()` once during initialization before spawning threads. For
 concurrent generation, give each thread its own `cg` instance.
@@ -395,6 +402,6 @@ concurrent generation, give each thread its own `cg` instance.
 
 | Exception | Condition |
 |-----------|-----------|
-| `std::runtime_error` | `get_city()` called with no data loaded |
+| `std::runtime_error` | `get_city({})` called with no data loaded |
 | `std::invalid_argument` | `get_city(request)` or `get_city(request, seed)` with a country code that matches no loaded cities (including an explicit empty code) |
 | `dasmig::core::tsv_error` | A malformed `cities.tsv`, layer or admin1 file (message gives file, line and column); the data is unchanged |

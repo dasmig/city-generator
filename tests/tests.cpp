@@ -77,7 +77,7 @@ TEST_CASE("has_data - false before load", "[loading]")
 TEST_CASE("get_city - returns a valid city", "[generation]")
 {
     auto gen = make_loaded_generator();
-    auto c = gen.get_city();
+    auto c = gen.get_city({});
     REQUIRE_FALSE(c.name.empty());
     REQUIRE(c.geonameid != 0);
     REQUIRE_FALSE(c.country_code.empty());
@@ -87,13 +87,13 @@ TEST_CASE("get_city - returns a valid city", "[generation]")
 TEST_CASE("get_city - throws when no data loaded", "[generation]")
 {
     dasmig::cg gen;
-    REQUIRE_THROWS_AS(gen.get_city(), std::runtime_error);
+    REQUIRE_THROWS_AS(gen.get_city({}), std::runtime_error);
 }
 
 TEST_CASE("get_city - implicit string conversion returns name", "[generation]")
 {
     auto gen = make_loaded_generator();
-    auto c = gen.get_city();
+    auto c = gen.get_city({});
     std::string s = c;
     REQUIRE(s == c.name);
 }
@@ -101,7 +101,7 @@ TEST_CASE("get_city - implicit string conversion returns name", "[generation]")
 TEST_CASE("get_city - stream operator outputs name", "[generation]")
 {
     auto gen = make_loaded_generator();
-    auto c = gen.get_city();
+    auto c = gen.get_city({});
     std::ostringstream oss;
     oss << c;
     REQUIRE(oss.str() == c.name);
@@ -144,27 +144,20 @@ TEST_CASE("get_city(request, seed) - same seed produces same city", "[seeding]")
 TEST_CASE("city::seed() - can replay a generation", "[seeding]")
 {
     auto gen = make_loaded_generator();
-    auto c1 = gen.get_city();
+    auto c1 = gen.get_city({});
     auto c2 = gen.get_city({}, c1.seed());
     REQUIRE(c1.geonameid == c2.geonameid);
 }
 
-TEST_CASE("seed() / unseed() - produces deterministic sequence", "[seeding]")
+TEST_CASE("a caller-owned rng gives a reproducible sequence", "[seeding]")
 {
     auto gen = make_loaded_generator();
-
-    gen.seed(100);
-    auto a1 = gen.get_city();
-    auto a2 = gen.get_city();
-
-    gen.seed(100);
-    auto b1 = gen.get_city();
-    auto b2 = gen.get_city();
-
-    REQUIRE(a1.geonameid == b1.geonameid);
-    REQUIRE(a2.geonameid == b2.geonameid);
-
-    gen.unseed();
+    dasmig::core::rng a{100};
+    dasmig::core::rng b{100};
+    for (int i = 0; i < 5; ++i)
+    {
+        REQUIRE(gen.get_city({}, a()).geonameid == gen.get_city({}, b()).geonameid);
+    }
 }
 
 TEST_CASE("get_city(request, seed) - deterministic with country filter",
@@ -408,12 +401,12 @@ TEST_CASE("instance() returns same reference", "[singleton]")
 TEST_CASE("city fields - all fields have reasonable values", "[data]")
 {
     auto gen = make_loaded_generator();
-    gen.seed(42);
+    dasmig::core::rng rng{42};
 
     // Sample several cities to cover variety.
     for (int i = 0; i < 50; ++i)
     {
-        auto c = gen.get_city();
+        auto c = gen.get_city({}, rng());
 
         REQUIRE(c.geonameid != 0);
         REQUIRE_FALSE(c.name.empty());
@@ -429,8 +422,6 @@ TEST_CASE("city fields - all fields have reasonable values", "[data]")
         // Seed round-trip works.
         REQUIRE(c.seed() != 0);
     }
-
-    gen.unseed();
 }
 
 // ---------------------------------------------------------------------------
@@ -441,14 +432,14 @@ TEST_CASE("population weighting - majority of draws are populated cities",
           "[weighting]")
 {
     auto gen = make_loaded_generator();
-    gen.seed(12345);
+    dasmig::core::rng rng{12345};
 
     int large_count = 0;
     static constexpr int draws = 200;
 
     for (int i = 0; i < draws; ++i)
     {
-        auto c = gen.get_city();
+        auto c = gen.get_city({}, rng());
         if (c.population > 100'000)
         {
             ++large_count;
@@ -459,7 +450,6 @@ TEST_CASE("population weighting - majority of draws are populated cities",
     // cities >100k. With uniform selection over 231k cities (~4k have >100k),
     // we'd expect ~3 hits. With weighting we expect well over half.
     REQUIRE(large_count > draws / 2);
-    gen.unseed();
 }
 
 // ---------------------------------------------------------------------------
@@ -508,16 +498,14 @@ TEST_CASE("load(dataset) returns false for missing tier", "[loading][tier]")
 TEST_CASE("country filter uses cached index correctly", "[country][cache]")
 {
     auto gen = make_loaded_generator();
-    gen.seed(42);
+    dasmig::core::rng rng{42};
 
     // Draw 50 cities filtered by "BR" using the cached path.
     for (int i = 0; i < 50; ++i)
     {
-        auto c = gen.get_city({.country = "BR"});
+        auto c = gen.get_city({.country = "BR"}, rng());
         REQUIRE(c.country_code == "BR");
     }
-
-    gen.unseed();
 }
 
 TEST_CASE("country filter seeded - cached path deterministic",
@@ -543,7 +531,7 @@ TEST_CASE("request weighted defaults to true", "[weighting]")
 TEST_CASE("request weighted=false enables uniform selection", "[weighting]")
 {
     auto gen = make_loaded_generator();
-    gen.seed(99);
+    dasmig::core::rng rng{99};
 
     // With uniform selection, smaller cities should appear much more often
     // than with weighted selection. Count cities below the median.
@@ -553,7 +541,7 @@ TEST_CASE("request weighted=false enables uniform selection", "[weighting]")
 
     for (int i = 0; i < draws; ++i)
     {
-        auto c = gen.get_city({.weighted = false});
+        auto c = gen.get_city({.weighted = false}, rng());
         if (c.population < 100'000)
         {
             ++below_100k;
@@ -564,22 +552,18 @@ TEST_CASE("request weighted=false enables uniform selection", "[weighting]")
     // Uniform selection should produce many of them (vs. weighted which
     // strongly favors the few large cities).
     REQUIRE(below_100k > draws / 2);
-
-    gen.unseed();
 }
 
 TEST_CASE("request weighted=false with country filter", "[weighting][country]")
 {
     auto gen = make_loaded_generator();
-    gen.seed(42);
+    dasmig::core::rng rng{42};
 
     for (int i = 0; i < 20; ++i)
     {
-        auto c = gen.get_city({.country = "JP", .weighted = false});
+        auto c = gen.get_city({.country = "JP", .weighted = false}, rng());
         REQUIRE(c.country_code == "JP");
     }
-
-    gen.unseed();
 }
 
 // ---------------------------------------------------------------------------
@@ -872,8 +856,6 @@ TEST_CASE("city_request does not leak filters or engine state", "[request][seedi
     const auto layers = gen.layers().size();
     for (const bool weighted : {true, false})
     {
-        gen.seed(100);
-        control.seed(100);
         for (std::uint64_t seed = 0; seed < 20; ++seed)
         {
             const dasmig::city_request request{.country = "XX", .weighted = !weighted};
@@ -884,9 +866,8 @@ TEST_CASE("city_request does not leak filters or engine state", "[request][seedi
             REQUIRE(request.country == "XX");
             REQUIRE(request.weighted == !weighted);
             REQUIRE(gen.get_city({}, seed).to_json() == control.get_city({}, seed).to_json());
-            REQUIRE(gen.get_city().to_json() == control.get_city().to_json());
-            REQUIRE(gen.get_city({.country = "YY"}).to_json() ==
-                    control.get_city({.country = "YY"}).to_json());
+            REQUIRE(gen.get_city({.country = "YY"}, seed).to_json() ==
+                    control.get_city({.country = "YY"}, seed).to_json());
         }
     }
     REQUIRE(gen.data_hash() == hash);

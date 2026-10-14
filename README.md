@@ -25,7 +25,7 @@
 
 - **GeoNames Data**. Ships with two dataset tiers — *full* (231,224 cities, pop ≥ 500) and *lite* (33,521 major cities, pop ≥ 15,000) — from GeoNames, licensed under CC BY 4.0.
 
-- **Deterministic Seeding**. Per-call `get_city(request, seed)` for reproducible results, generator-level `seed()` / `unseed()` for deterministic sequences, and `city::seed()` for replaying a previous generation.
+- **Deterministic Seeding**. Per-call `get_city(request, seed)` for reproducible results, and `city::seed()` for replaying a previous generation.
 
 - **Request-First API**. `get_city(request)` and `get_city(request, seed)` take a `city_request` with an optional country filter and a population-weighted (default) or uniform selection mode. There are no generator-level defaults.
 
@@ -92,7 +92,7 @@ cg::instance().load(dasmig::dataset::lite);  // 33,521 major cities
 cg::instance().load(dasmig::dataset::full);  // 231,224 cities
 
 // Generate a random city (population-weighted).
-auto city = cg::instance().get_city();
+auto city = cg::instance().get_city({});
 std::cout << city.name << ", " << city.country_code
           << " (pop. " << city.population << ")" << std::endl;
 
@@ -118,10 +118,10 @@ auto requested_replay = cg::instance().get_city(request, requested.seed());
 // A default request selects globally with population weighting.
 // Replay requires the same request and loaded data as well as the seed.
 
-// Seed the engine for a deterministic sequence.
-cg::instance().seed(100);
-// ... generate cities ...
-cg::instance().unseed(); // restore non-deterministic state
+// A deterministic sequence: keep a dasmig::core::rng and pass its next value.
+dasmig::core::rng rng{100};
+auto first = cg::instance().get_city({}, rng());
+auto second = cg::instance().get_city({}, rng());
 
 // Uniform selection: any city equally likely.
 auto uniform_city = cg::instance().get_city({.weighted = false});
@@ -129,8 +129,10 @@ auto uniform_city = cg::instance().get_city({.weighted = false});
 // Independent instance — separate data and random engine.
 cg my_gen;
 my_gen.load("path/to/cities.tsv");
-auto c = my_gen.get_city();
+auto c = my_gen.get_city({});
 ```
+
+Generation always takes a request: `get_city(request)` or `get_city(request, seed)`, with `{}` for the defaults. The generator has no `seed()` or `unseed()`; see [Migrating from v3](doc/usage.md#migrating-from-v3).
 
 For the complete feature guide — fields, filtering, weighting, and more — see the **[Usage Guide](doc/usage.md)**.
 

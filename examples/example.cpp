@@ -15,7 +15,7 @@ int main()
     std::cout << "=== Random cities ===" << '\n';
     for (int i = 0; i < 10; ++i)
     {
-        auto c = gen.get_city();
+        auto c = gen.get_city({});
         std::cout << c.name << ", " << c.country_code
                   << " (pop. " << c.population << ")" << '\n';
     }
@@ -32,7 +32,7 @@ int main()
 
     // Access all available fields.
     std::cout << "\n=== Full city details ===" << '\n';
-    auto c = gen.get_city();
+    auto c = gen.get_city({});
     std::cout << "Name:         " << c.name << '\n';
     std::cout << "ASCII name:   " << c.asciiname << '\n';
     std::cout << "Country:      " << c.country_code << '\n';
@@ -63,14 +63,13 @@ int main()
     std::cout << "uniform BR -> " << requested.name << '\n';
     std::cout << "replay     -> " << gen.get_city(request, requested.seed()) << '\n';
 
-    // Seed the engine for a deterministic sequence.
-    gen.seed(100);
+    // A deterministic sequence: keep a core::rng and pass its next value as the seed.
+    dasmig::core::rng sequence{100};
     std::cout << "\n=== Seeded sequence ===" << '\n';
     for (int i = 0; i < 3; ++i)
     {
-        std::cout << gen.get_city() << '\n';
+        std::cout << gen.get_city({}, sequence()) << '\n';
     }
-    gen.unseed(); // restore non-deterministic state
 
     // JSON with the replay signature (seed and data hash).
     std::cout << "\n=== JSON ===" << '\n';

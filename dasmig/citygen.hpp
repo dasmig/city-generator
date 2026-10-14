@@ -224,11 +224,12 @@ class cg
     // -- Generation -------------------------------------------------------
 
     /// @brief Generate a random city using the internal engine.
+    ///        Use `{}` for the defaults.
     /// @param request Country filter and selection mode for this call only.
     /// @return A city object with all fields.
     /// @throws std::runtime_error If no data has been loaded.
     /// @throws std::invalid_argument If no cities match the requested country.
-    [[nodiscard]] city get_city(const city_request& request = {})
+    [[nodiscard]] city get_city(const city_request& request)
     {
         return get_city(request, _engine());
     }
@@ -266,30 +267,6 @@ class cg
                                   : static_cast<std::size_t>(core::bounded(r, entry.indices.size()));
         return result_(_cities[entry.indices[selected]], call_seed);
     }
-
-    // -- Seeding ----------------------------------------------------------
-
-    /// @name Seeding
-    /// @{
-
-    /// @brief Seed the internal random engine for deterministic sequences.
-    /// @param seed_value The seed value.
-    /// @return `*this` for chaining.
-    cg& seed(std::uint64_t seed_value)
-    {
-        _engine.seed(seed_value);
-        return *this;
-    }
-
-    /// @brief Reseed the engine with a non-deterministic source.
-    /// @return `*this` for chaining.
-    cg& unseed()
-    {
-        _engine.unseed();
-        return *this;
-    }
-
-    /// @}
 
     // -- Admin1 resolution ------------------------------------------------
 
