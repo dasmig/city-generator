@@ -27,7 +27,7 @@
 
 - **Deterministic Seeding**. Per-call `get_city(seed)` for reproducible results, generator-level `seed()` / `unseed()` for deterministic sequences, and `city::seed()` for replaying a previous generation.
 
-- **Uniform Selection**. Switch to equal-probability selection with `weighted(false)` — every city has the same chance regardless of population.
+- **Per-Call Options**. Use `get_city(seed, city_request)` for country filtering and population-weighted or uniform selection without changing generator settings. Requests default to population-weighted selection; the simple overloads and `weighted()` getter/setter remain compatible.
 
 - **Identical Everywhere**. A seed gives the same city on every compiler, standard library and CPU (GCC, Clang, MSVC, Emscripten; x86-64 and ARM64), checked by known-answer tests.
 
@@ -110,12 +110,22 @@ auto seeded = cg::instance().get_city(42);
 // Replay a previous city using its seed.
 auto replay = cg::instance().get_city(seeded.seed());
 
+// Explicit per-call options: uniform selection within Brazil.
+const dasmig::city_request request{.country = "BR", .weighted = false};
+auto requested = cg::instance().get_city(42, request);
+auto requested_replay = cg::instance().get_city(requested.seed(), request);
+
+// A default request always selects globally with population weighting.
+auto default_request_city = cg::instance().get_city(42, dasmig::city_request{});
+// Request calls do not change weighted() or advance the internal engine.
+// Replay requires the same request and loaded data as well as the seed.
+
 // Seed the engine for a deterministic sequence.
 cg::instance().seed(100);
 // ... generate cities ...
 cg::instance().unseed(); // restore non-deterministic state
 
-// Switch to uniform random selection (equal probability).
+// Compatibility mode for the simple overloads (not explicit requests).
 cg::instance().weighted(false);
 auto uniform_city = cg::instance().get_city();  // any city equally likely
 cg::instance().weighted(true);  // restore population-weighted

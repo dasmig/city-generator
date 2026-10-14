@@ -56,6 +56,13 @@ int main()
     std::cout << "replay  -> " << replay.name << ", " << replay.country_code
               << '\n';
 
+    // Per-call selection without changing the generator's compatibility mode.
+    std::cout << "\n=== Per-call request ===" << '\n';
+    const dasmig::city_request request{.country = "BR", .weighted = false};
+    const auto requested = gen.get_city(42, request);
+    std::cout << "uniform BR -> " << requested.name << '\n';
+    std::cout << "replay     -> " << gen.get_city(requested.seed(), request) << '\n';
+
     // Seed the engine for a deterministic sequence.
     gen.seed(100);
     std::cout << "\n=== Seeded sequence ===" << '\n';
