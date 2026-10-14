@@ -31,7 +31,7 @@ DASMIG_CORE_REQUIRE(1, 0);
 namespace dasmig
 {
 
-/// @brief Per-call city selection options, independent of cg::weighted().
+/// @brief Per-call city selection options.
 struct city_request
 {
     /// @brief ISO-3166 two-letter country code, or no filter when absent.
@@ -99,8 +99,8 @@ class city
 
     /// @brief Retrieve the random seed used to generate this city.
     /// @return The per-call seed for replay.
-    /// @see cg::get_city(std::uint64_t)
-    /// @see cg::get_city(std::uint64_t, const city_request&)
+    /// @see cg::get_city(const city_request&)
+    /// @see cg::get_city(const city_request&, std::uint64_t)
     [[nodiscard]] std::uint64_t seed() const
     {
         return _signature.seed;
@@ -223,61 +223,28 @@ class cg
 
     // -- Generation -------------------------------------------------------
 
-    /// @brief Generate a random city.
-    ///
-    /// Compatibility overload using the mode set by weighted() (weighted
-    /// by default). Use get_city(seed, request) for explicit per-call options.
+    /// @brief Generate a random city using the internal engine.
+    /// @param request Country filter and selection mode for this call only.
     /// @return A city object with all fields.
     /// @throws std::runtime_error If no data has been loaded.
-    [[nodiscard]] city get_city()
+    /// @throws std::invalid_argument If no cities match the requested country.
+    [[nodiscard]] city get_city(const city_request& request = {})
     {
-        return get_city(_engine());
-    }
-
-    /// @brief Generate a deterministic city using a specific seed.
-    /// @param call_seed Seed for reproducible results.
-    /// @return A city object with all fields.
-    /// @throws std::runtime_error If no data has been loaded.
-    [[nodiscard]] city get_city(std::uint64_t call_seed) const
-    {
-        return get_city(call_seed, city_request{.weighted = _weighted});
-    }
-
-    /// @brief Generate a random city filtered by country.
-    /// @param country ISO-3166 two-letter country code (e.g. "BR").
-    /// @return A city object from the specified country.
-    /// @throws std::runtime_error If no data has been loaded.
-    /// @throws std::invalid_argument If no cities match the country code.
-    [[nodiscard]] city get_city(const std::string& country)
-    {
-        return get_city(country, _engine());
-    }
-
-    /// @brief Generate a deterministic city filtered by country.
-    /// @param country ISO-3166 two-letter country code.
-    /// @param call_seed Seed for reproducible results.
-    /// @return A city object from the specified country.
-    /// @throws std::runtime_error If no data has been loaded.
-    /// @throws std::invalid_argument If no cities match the country code.
-    [[nodiscard]] city get_city(const std::string& country,
-                                std::uint64_t call_seed) const
-    {
-        return get_city(call_seed, city_request{.country = country, .weighted = _weighted});
+        return get_city(request, _engine());
     }
 
     /// @brief Generate a deterministic city with explicit per-call options.
     ///
-    /// Request defaults select globally with population weighting, regardless
-    /// of weighted(). Neither that setting nor the internal engine is changed.
-    /// Replay requires the same seed, request and loaded data.
+    /// Replay requires the same seed, request and loaded data. The internal
+    /// engine is not changed.
     ///
-    /// @param call_seed Seed for reproducible results.
     /// @param request Country filter and selection mode for this call only.
+    /// @param call_seed Seed for reproducible results.
     /// @return A city object with all fields and its replay signature.
     /// @throws std::runtime_error If no data has been loaded.
     /// @throws std::invalid_argument If no cities match the requested country.
-    [[nodiscard]] city get_city(std::uint64_t call_seed,
-                                const city_request& request) const
+    [[nodiscard]] city get_city(const city_request& request,
+                                std::uint64_t call_seed) const
     {
         require_data_();
         auto r = core::rng{call_seed}.split("city");
@@ -323,23 +290,6 @@ class cg
     }
 
     /// @}
-
-    /// @brief Set the compatibility mode for the simple get_city() overloads.
-    /// Explicit city_request calls are unaffected.
-    /// @param enable `true` for weighted (default), `false` for uniform.
-    /// @return `*this` for chaining.
-    cg& weighted(bool enable)
-    {
-        _weighted = enable;
-        return *this;
-    }
-
-    /// @brief Query the compatibility mode for the simple get_city() overloads.
-    /// @return `true` if weighted (default), `false` if uniform.
-    [[nodiscard]] bool weighted() const
-    {
-        return _weighted;
-    }
 
     // -- Admin1 resolution ------------------------------------------------
 
@@ -566,7 +516,6 @@ class cg
     core::discrete _distribution{1.0}; // replaced in rebuild_() when data is loaded
     std::map<std::string, country_entry, std::less<>> _country_index;
     std::map<std::string, std::string, std::less<>> _admin1_names;
-    bool _weighted{true};
     core::rng _engine{core::rng::from_entropy()};
 
     struct auto_probe_tag {};

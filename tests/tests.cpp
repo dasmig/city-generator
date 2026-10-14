@@ -111,32 +111,32 @@ TEST_CASE("get_city - stream operator outputs name", "[generation]")
 // Country filtering
 // ---------------------------------------------------------------------------
 
-TEST_CASE("get_city(country) - returns city from specified country",
+TEST_CASE("get_city(request) - returns city from specified country",
           "[filtering]")
 {
     auto gen = make_loaded_generator();
     for (int i = 0; i < 20; ++i)
     {
-        auto c = gen.get_city("US");
+        auto c = gen.get_city({.country = "US"});
         REQUIRE(c.country_code == "US");
     }
 }
 
-TEST_CASE("get_city(country) - throws for unknown country", "[filtering]")
+TEST_CASE("get_city(request) - throws for unknown country", "[filtering]")
 {
     auto gen = make_loaded_generator();
-    REQUIRE_THROWS_AS(gen.get_city("ZZ"), std::invalid_argument);
+    REQUIRE_THROWS_AS(gen.get_city({.country = "ZZ"}), std::invalid_argument);
 }
 
 // ---------------------------------------------------------------------------
 // Seeding and determinism
 // ---------------------------------------------------------------------------
 
-TEST_CASE("get_city(seed) - same seed produces same city", "[seeding]")
+TEST_CASE("get_city(request, seed) - same seed produces same city", "[seeding]")
 {
     auto gen = make_loaded_generator();
-    auto c1 = gen.get_city(42);
-    auto c2 = gen.get_city(42);
+    auto c1 = gen.get_city({}, 42);
+    auto c2 = gen.get_city({}, 42);
     REQUIRE(c1.geonameid == c2.geonameid);
     REQUIRE(c1.name == c2.name);
 }
@@ -145,7 +145,7 @@ TEST_CASE("city::seed() - can replay a generation", "[seeding]")
 {
     auto gen = make_loaded_generator();
     auto c1 = gen.get_city();
-    auto c2 = gen.get_city(c1.seed());
+    auto c2 = gen.get_city({}, c1.seed());
     REQUIRE(c1.geonameid == c2.geonameid);
 }
 
@@ -167,12 +167,12 @@ TEST_CASE("seed() / unseed() - produces deterministic sequence", "[seeding]")
     gen.unseed();
 }
 
-TEST_CASE("get_city(country, seed) - deterministic with country filter",
+TEST_CASE("get_city(request, seed) - deterministic with country filter",
           "[seeding]")
 {
     auto gen = make_loaded_generator();
-    auto c1 = gen.get_city("JP", 99);
-    auto c2 = gen.get_city("JP", 99);
+    auto c1 = gen.get_city({.country = "JP"}, 99);
+    auto c2 = gen.get_city({.country = "JP"}, 99);
     REQUIRE(c1.geonameid == c2.geonameid);
     REQUIRE(c1.country_code == "JP");
 }
@@ -245,7 +245,7 @@ TEST_CASE("load - a malformed line is an error with its location", "[loading]")
     }
     gen.load(tmp);
     REQUIRE(gen.city_count() == 1);
-    auto c = gen.get_city(42);
+    auto c = gen.get_city({}, 42);
     REQUIRE(c.name == "TestCity");
     REQUIRE(c.country_code == "XX");
     REQUIRE(c.population == 5000);
@@ -308,7 +308,7 @@ TEST_CASE("load - handles CRLF line endings", "[loading]")
     gen.load(tmp);
     REQUIRE(gen.city_count() == 1);
 
-    auto c = gen.get_city(42);
+    auto c = gen.get_city({}, 42);
     REQUIRE(c.name == "CRLFCity");
     REQUIRE(c.timezone == "Europe/Berlin");
 
@@ -371,23 +371,23 @@ TEST_CASE("load - a non-numeric id is an error", "[loading]")
 // Const overload throws
 // ---------------------------------------------------------------------------
 
-TEST_CASE("get_city(seed) - throws when no data loaded", "[generation]")
+TEST_CASE("get_city(request, seed) - throws when no data loaded", "[generation]")
 {
     const dasmig::cg gen;
-    REQUIRE_THROWS_AS(gen.get_city(42), std::runtime_error);
+    REQUIRE_THROWS_AS(gen.get_city({}, 42), std::runtime_error);
 }
 
-TEST_CASE("get_city(country) - throws when no data loaded", "[filtering]")
+TEST_CASE("get_city(request) - country throws when no data loaded", "[filtering]")
 {
     dasmig::cg gen;
-    REQUIRE_THROWS_AS(gen.get_city("US"), std::runtime_error);
+    REQUIRE_THROWS_AS(gen.get_city({.country = "US"}), std::runtime_error);
 }
 
-TEST_CASE("get_city(country, seed) - throws when no data loaded",
+TEST_CASE("get_city(request, seed) - country throws when no data loaded",
           "[filtering]")
 {
     const dasmig::cg gen;
-    REQUIRE_THROWS_AS(gen.get_city("US", 42), std::runtime_error);
+    REQUIRE_THROWS_AS(gen.get_city({.country = "US"}, 42), std::runtime_error);
 }
 
 // ---------------------------------------------------------------------------
@@ -513,7 +513,7 @@ TEST_CASE("country filter uses cached index correctly", "[country][cache]")
     // Draw 50 cities filtered by "BR" using the cached path.
     for (int i = 0; i < 50; ++i)
     {
-        auto c = gen.get_city("BR");
+        auto c = gen.get_city({.country = "BR"});
         REQUIRE(c.country_code == "BR");
     }
 
@@ -525,8 +525,8 @@ TEST_CASE("country filter seeded - cached path deterministic",
 {
     auto gen = make_loaded_generator();
 
-    auto c1 = gen.get_city("DE", 7777);
-    auto c2 = gen.get_city("DE", 7777);
+    auto c1 = gen.get_city({.country = "DE"}, 7777);
+    auto c2 = gen.get_city({.country = "DE"}, 7777);
     REQUIRE(c1.geonameid == c2.geonameid);
     REQUIRE(c1.country_code == "DE");
 }
@@ -535,17 +535,15 @@ TEST_CASE("country filter seeded - cached path deterministic",
 // Uniform (non-weighted) generation
 // ---------------------------------------------------------------------------
 
-TEST_CASE("weighted defaults to true", "[weighting]")
+TEST_CASE("request weighted defaults to true", "[weighting]")
 {
-    auto gen = make_loaded_generator();
-    REQUIRE(gen.weighted() == true);
+    REQUIRE(dasmig::city_request{}.weighted == true);
 }
 
-TEST_CASE("weighted(false) enables uniform selection", "[weighting]")
+TEST_CASE("request weighted=false enables uniform selection", "[weighting]")
 {
     auto gen = make_loaded_generator();
-    gen.weighted(false).seed(99);
-    REQUIRE(gen.weighted() == false);
+    gen.seed(99);
 
     // With uniform selection, smaller cities should appear much more often
     // than with weighted selection. Count cities below the median.
@@ -555,7 +553,7 @@ TEST_CASE("weighted(false) enables uniform selection", "[weighting]")
 
     for (int i = 0; i < draws; ++i)
     {
-        auto c = gen.get_city();
+        auto c = gen.get_city({.weighted = false});
         if (c.population < 100'000)
         {
             ++below_100k;
@@ -567,29 +565,21 @@ TEST_CASE("weighted(false) enables uniform selection", "[weighting]")
     // strongly favors the few large cities).
     REQUIRE(below_100k > draws / 2);
 
-    gen.weighted(true).unseed();
+    gen.unseed();
 }
 
-TEST_CASE("weighted(false) with country filter", "[weighting][country]")
+TEST_CASE("request weighted=false with country filter", "[weighting][country]")
 {
     auto gen = make_loaded_generator();
-    gen.weighted(false).seed(42);
+    gen.seed(42);
 
     for (int i = 0; i < 20; ++i)
     {
-        auto c = gen.get_city("JP");
+        auto c = gen.get_city({.country = "JP", .weighted = false});
         REQUIRE(c.country_code == "JP");
     }
 
-    gen.weighted(true).unseed();
-}
-
-TEST_CASE("weighted toggle is chainable", "[weighting]")
-{
-    auto gen = make_loaded_generator();
-    auto& ref = gen.weighted(false);
-    REQUIRE(&ref == &gen);
-    gen.weighted(true);
+    gen.unseed();
 }
 
 // ---------------------------------------------------------------------------
@@ -767,7 +757,7 @@ dasmig::cg make_request_generator()
 // Per-call requests
 // ---------------------------------------------------------------------------
 
-TEST_CASE("city_request defaults match population-weighted generation", "[request]")
+TEST_CASE("city_request defaults select globally with population weighting", "[request]")
 {
     auto gen = make_request_generator();
     const dasmig::city_request request;
@@ -776,32 +766,23 @@ TEST_CASE("city_request defaults match population-weighted generation", "[reques
 
     for (std::uint64_t seed = 0; seed < 64; ++seed)
     {
-        const auto expected = gen.get_city(seed).to_json();
-        REQUIRE(gen.get_city(seed, request).to_json() == expected);
-        gen.weighted(false);
-        REQUIRE(gen.get_city(seed, request).to_json() == expected);
-        REQUIRE_FALSE(gen.weighted());
-        gen.weighted(true);
+        REQUIRE(gen.get_city(request, seed).to_json() ==
+                gen.get_city({.weighted = true}, seed).to_json());
     }
 }
 
-TEST_CASE("city_request country and weighting match compatibility overloads",
+TEST_CASE("city_request country filters the selection",
           "[request][filtering][weighting]")
 {
     auto gen = make_request_generator();
     for (const bool weighted : {true, false})
     {
-        gen.weighted(weighted);
-        for (const auto& country : {std::optional<std::string>{}, std::optional<std::string>{"XX"},
-                                    std::optional<std::string>{"YY"}})
+        for (const std::string country : {"XX", "YY"})
         {
-            const dasmig::city_request request{.country = country, .weighted = weighted};
             for (std::uint64_t seed = 0; seed < 64; ++seed)
             {
-                const auto c = gen.get_city(seed, request);
-                const auto expected = country ? gen.get_city(*country, seed) : gen.get_city(seed);
-                REQUIRE(c.to_json() == expected.to_json());
-                if (country) REQUIRE(c.country_code == *country);
+                const auto c = gen.get_city({.country = country, .weighted = weighted}, seed);
+                REQUIRE(c.country_code == country);
             }
         }
     }
@@ -819,8 +800,8 @@ TEST_CASE("city_request controls population-weighted and uniform probabilities",
         bool saw_zero_population = false;
         for (std::uint64_t seed = 0; seed < 1000; ++seed)
         {
-            const auto weighted = gen.get_city(seed, {.country = country});
-            const auto uniform = gen.get_city(seed, {.country = country, .weighted = false});
+            const auto weighted = gen.get_city({.country = country}, seed);
+            const auto uniform = gen.get_city({.country = country, .weighted = false}, seed);
             if (weighted.population == 999) ++weighted_large;
             if (uniform.population == 999) ++uniform_large;
             if (weighted.population == 0) saw_zero_population = true;
@@ -845,11 +826,10 @@ TEST_CASE("city_request replays every seed with the same data and options",
             for (const auto seed : {std::uint64_t{0}, std::uint64_t{42},
                                     std::numeric_limits<std::uint64_t>::max()})
             {
-                const auto c = std::as_const(gen).get_city(seed, request);
-                gen.weighted(!weighted);
+                const auto c = std::as_const(gen).get_city(request, seed);
                 REQUIRE(c.seed() == seed);
                 REQUIRE(c.signature().data == gen.data_hash());
-                REQUIRE(gen.get_city(c.seed(), request).to_json() == c.to_json());
+                REQUIRE(gen.get_city(request, c.seed()).to_json() == c.to_json());
             }
         }
     }
@@ -863,9 +843,9 @@ TEST_CASE("city_request preserves empty-data and country errors", "[request][err
     {
         for (const bool weighted : {true, false})
         {
-            REQUIRE_THROWS_AS(empty.get_city(42, {.country = country, .weighted = weighted}),
+            REQUIRE_THROWS_AS(empty.get_city({.country = country, .weighted = weighted}, 42),
                               std::runtime_error);
-            REQUIRE_THROWS_WITH(empty.get_city(42, {.country = country, .weighted = weighted}),
+            REQUIRE_THROWS_WITH(empty.get_city({.country = country, .weighted = weighted}, 42),
                                 "No city data loaded. Call load() first.");
         }
     }
@@ -875,18 +855,15 @@ TEST_CASE("city_request preserves empty-data and country errors", "[request][err
     {
         for (const bool weighted : {true, false})
         {
-            REQUIRE_THROWS_AS(gen.get_city(42, {.country = country, .weighted = weighted}),
+            REQUIRE_THROWS_AS(gen.get_city({.country = country, .weighted = weighted}, 42),
                               std::invalid_argument);
-            REQUIRE_THROWS_WITH(gen.get_city(42, {.country = country, .weighted = weighted}),
-                                "No cities found for country code: " + country);
-            REQUIRE_THROWS_WITH(gen.get_city(country, 42),
+            REQUIRE_THROWS_WITH(gen.get_city({.country = country, .weighted = weighted}, 42),
                                 "No cities found for country code: " + country);
         }
     }
-    REQUIRE_THROWS_AS(gen.get_city({}, 42), std::invalid_argument);
 }
 
-TEST_CASE("city_request does not leak settings, filters or engine state", "[request][seeding]")
+TEST_CASE("city_request does not leak filters or engine state", "[request][seeding]")
 {
     auto gen = make_request_generator();
     auto control = make_request_generator();
@@ -895,22 +872,21 @@ TEST_CASE("city_request does not leak settings, filters or engine state", "[requ
     const auto layers = gen.layers().size();
     for (const bool weighted : {true, false})
     {
-        gen.weighted(weighted).seed(100);
-        control.weighted(weighted).seed(100);
+        gen.seed(100);
+        control.seed(100);
         for (std::uint64_t seed = 0; seed < 20; ++seed)
         {
             const dasmig::city_request request{.country = "XX", .weighted = !weighted};
-            REQUIRE(gen.get_city(seed, request).country_code == "XX");
-            REQUIRE(gen.get_city(seed, {.country = "YY", .weighted = !weighted}).country_code == "YY");
-            REQUIRE_THROWS_AS(gen.get_city(seed, {.country = "ZZ", .weighted = !weighted}),
+            REQUIRE(gen.get_city(request, seed).country_code == "XX");
+            REQUIRE(gen.get_city({.country = "YY", .weighted = !weighted}, seed).country_code == "YY");
+            REQUIRE_THROWS_AS(gen.get_city({.country = "ZZ", .weighted = !weighted}, seed),
                               std::invalid_argument);
-            REQUIRE(gen.weighted() == weighted);
             REQUIRE(request.country == "XX");
             REQUIRE(request.weighted == !weighted);
-            REQUIRE(gen.get_city(seed).to_json() == control.get_city(seed).to_json());
-            REQUIRE(gen.get_city("YY", seed).to_json() == control.get_city("YY", seed).to_json());
+            REQUIRE(gen.get_city({}, seed).to_json() == control.get_city({}, seed).to_json());
             REQUIRE(gen.get_city().to_json() == control.get_city().to_json());
-            REQUIRE(gen.get_city("YY").to_json() == control.get_city("YY").to_json());
+            REQUIRE(gen.get_city({.country = "YY"}).to_json() ==
+                    control.get_city({.country = "YY"}).to_json());
         }
     }
     REQUIRE(gen.data_hash() == hash);
@@ -923,27 +899,21 @@ TEST_CASE("known answers for fixed seeds", "[kat]")
     auto gen = load_lite_file();
     REQUIRE(gen.data_hash() == 0x7e8af51013ede34aULL);
 
-    REQUIRE(gen.get_city(std::uint64_t{1}).to_json() ==
+    REQUIRE(gen.get_city({}, 1).to_json() ==
             R"({"geonameid":953781,"name":"Soweto","asciiname":"Soweto","latitude":-26.26781,)"
             R"("longitude":27.85849,"feature_code":"PPL","country_code":"ZA","cc2":"","admin1_code":"06",)"
             R"("admin2_code":"JHB","admin3_code":"JHB","admin4_code":"","population":1695047,)"
             R"("elevation":null,"dem":1632,"timezone":"Africa/Johannesburg",)"
             R"("signature":{"seed":"0000000000000001","data":"7e8af51013ede34a"}})");
-    REQUIRE(gen.get_city("BR", std::uint64_t{3}).geonameid == 3470127);
-    gen.weighted(false);
-    REQUIRE(gen.get_city(std::uint64_t{2}).geonameid == 3446019);
-    REQUIRE(gen.get_city("JP", std::uint64_t{4}).geonameid == 2112802);
-    gen.weighted(true);
-
-    REQUIRE(gen.get_city(std::uint64_t{1}, {}).geonameid == 953781);
-    REQUIRE(gen.get_city(std::uint64_t{3}, {.country = "BR"}).geonameid == 3470127);
-    REQUIRE(gen.get_city(std::uint64_t{2}, {.weighted = false}).geonameid == 3446019);
-    REQUIRE(gen.get_city(std::uint64_t{4}, {.country = "JP", .weighted = false}).geonameid == 2112802);
+    REQUIRE(gen.get_city({.country = "BR"}, 3).geonameid == 3470127);
+    REQUIRE(gen.get_city({.weighted = false}, 2).geonameid == 3446019);
+    REQUIRE(gen.get_city({.country = "JP", .weighted = false}, 4).geonameid == 2112802);
+    REQUIRE(gen.get_city({}, 1).geonameid == 953781);
 
     std::uint64_t h = 0xcbf29ce484222325ULL;
     for (std::uint64_t s = 0; s < 10000; ++s)
     {
-        for (const char c : gen.get_city(s).to_json())
+        for (const char c : gen.get_city({}, s).to_json())
         {
             h ^= static_cast<unsigned char>(c);
             h *= 0x100000001b3ULL;
@@ -961,7 +931,7 @@ TEST_CASE("to_json and signature", "[json]")
     dasmig::cg gen;
     gen.extend_from_string(city_header + city_row("101", "Alpha", "XX", "1000"), "one.tsv",
                            dasmig::core::layer_mode::replace);
-    const auto c = gen.get_city(std::uint64_t{5});
+    const auto c = gen.get_city({}, 5);
     REQUIRE(c.seed() == 5);
     REQUIRE(c.signature().data == gen.data_hash());
     REQUIRE(c.to_json() ==
@@ -991,13 +961,13 @@ TEST_CASE("extend adds, overrides and removes cities", "[extend]")
     REQUIRE(info.added == 1);
     REQUIRE(info.replaced == 1);
     REQUIRE(gen.city_count() == count + 1);
-    REQUIRE(gen.get_city("QQ").name == "Atlantis City");
-    REQUIRE(gen.get_city(std::uint64_t{1}).name == "Soweto Renamed"); // same draw, new data
+    REQUIRE(gen.get_city({.country = "QQ"}).name == "Atlantis City");
+    REQUIRE(gen.get_city({}, 1).name == "Soweto Renamed"); // same draw, new data
     REQUIRE(gen.data_hash() != base_hash);
 
     gen.extend_from_string("geonameid\tdisabled\n101\t1\n", "sink.tsv");
     REQUIRE(gen.city_count() == count);
-    REQUIRE_THROWS_AS(gen.get_city("QQ"), std::invalid_argument);
+    REQUIRE_THROWS_AS(gen.get_city({.country = "QQ"}), std::invalid_argument);
 
     gen.load(std::filesystem::path{gen.layers().front().source});
     REQUIRE(gen.data_hash() == base_hash);
@@ -1040,6 +1010,6 @@ TEST_CASE("compiled-in data needs no files and matches them", "[embed]")
     REQUIRE(loaded);
     REQUIRE(gen.layers().front().source == "embedded:lite/cities.tsv");
     REQUIRE(gen.data_hash() == 0x7e8af51013ede34aULL); // same as the file
-    REQUIRE(gen.get_city(std::uint64_t{1}).geonameid == 953781);
+    REQUIRE(gen.get_city({}, 1).geonameid == 953781);
 }
 #endif
