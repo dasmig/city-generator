@@ -24,7 +24,7 @@ int main()
     std::cout << "\n=== Brazilian cities ===" << '\n';
     for (int i = 0; i < 5; ++i)
     {
-        auto c = gen.get_city("BR");
+        auto c = gen.get_city({.country = "BR"});
         std::cout << c.name << ", " << c.admin1_code
                   << " (pop. " << c.population
                   << ", tz: " << c.timezone << ")" << '\n';
@@ -47,21 +47,21 @@ int main()
 
     // Deterministic generation — same seed always produces the same city.
     std::cout << "\n=== Seeded (deterministic) ===" << '\n';
-    auto seeded = gen.get_city(42);
+    auto seeded = gen.get_city({}, 42);
     std::cout << "seed 42 -> " << seeded.name << ", " << seeded.country_code
               << '\n';
 
     // Replay: retrieve the seed from a city and replay it.
-    auto replay = gen.get_city(seeded.seed());
+    auto replay = gen.get_city({}, seeded.seed());
     std::cout << "replay  -> " << replay.name << ", " << replay.country_code
               << '\n';
 
-    // Per-call selection without changing the generator's compatibility mode.
+    // Per-call country filter and selection mode.
     std::cout << "\n=== Per-call request ===" << '\n';
     const dasmig::city_request request{.country = "BR", .weighted = false};
-    const auto requested = gen.get_city(42, request);
+    const auto requested = gen.get_city(request, 42);
     std::cout << "uniform BR -> " << requested.name << '\n';
-    std::cout << "replay     -> " << gen.get_city(requested.seed(), request) << '\n';
+    std::cout << "replay     -> " << gen.get_city(request, requested.seed()) << '\n';
 
     // Seed the engine for a deterministic sequence.
     gen.seed(100);
@@ -74,7 +74,7 @@ int main()
 
     // JSON with the replay signature (seed and data hash).
     std::cout << "\n=== JSON ===" << '\n';
-    std::cout << gen.get_city("JP", std::uint64_t{7}).to_json() << '\n';
+    std::cout << gen.get_city({.country = "JP"}, 7).to_json() << '\n';
 
     // Extend the data with a layer: a new city in its own country.
     std::cout << "\n=== Extension layer ===" << '\n';
@@ -83,7 +83,7 @@ int main()
         "99000001\tPoseidonis\t31.0\t-24.0\tQQ\t250000\tAtlantic/Azores\n",
         "atlantis");
     std::cout << layer.source << ": " << layer.added << " added\n";
-    std::cout << "From QQ: " << gen.get_city("QQ") << '\n';
+    std::cout << "From QQ: " << gen.get_city({.country = "QQ"}) << '\n';
 
     // Library info.
     std::cout << "\n=== Info ===" << '\n';

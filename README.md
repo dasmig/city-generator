@@ -21,13 +21,13 @@
 
 - **Rich City Data**. Every generated city includes 16 GeoNames fields: name, coordinates, country, administrative divisions, population, elevation, timezone, and more.
 
-- **Country Filtering**. Generate cities from a specific country with `get_city("BR")`.
+- **Country Filtering**. Generate cities from a specific country with `get_city({.country = "BR"})`.
 
 - **GeoNames Data**. Ships with two dataset tiers — *full* (231,224 cities, pop ≥ 500) and *lite* (33,521 major cities, pop ≥ 15,000) — from GeoNames, licensed under CC BY 4.0.
 
-- **Deterministic Seeding**. Per-call `get_city(seed)` for reproducible results, generator-level `seed()` / `unseed()` for deterministic sequences, and `city::seed()` for replaying a previous generation.
+- **Deterministic Seeding**. Per-call `get_city(request, seed)` for reproducible results, generator-level `seed()` / `unseed()` for deterministic sequences, and `city::seed()` for replaying a previous generation.
 
-- **Per-Call Options**. Use `get_city(seed, city_request)` for country filtering and population-weighted or uniform selection without changing generator settings. Requests default to population-weighted selection; the simple overloads and `weighted()` getter/setter remain compatible.
+- **Request-First API**. `get_city(request)` and `get_city(request, seed)` take a `city_request` with an optional country filter and a population-weighted (default) or uniform selection mode. There are no generator-level defaults.
 
 - **Identical Everywhere**. A seed gives the same city on every compiler, standard library and CPU (GCC, Clang, MSVC, Emscripten; x86-64 and ARM64), checked by known-answer tests.
 
@@ -97,27 +97,25 @@ std::cout << city.name << ", " << city.country_code
           << " (pop. " << city.population << ")" << std::endl;
 
 // Generate a city from a specific country.
-auto br_city = cg::instance().get_city("BR");
+auto br_city = cg::instance().get_city({.country = "BR"});
 
 // Access all available fields.
 std::cout << city.latitude << ", " << city.longitude << std::endl;
 std::cout << city.timezone << std::endl;
 std::cout << city.elevation << " m" << std::endl;
 
-// Deterministic generation — same seed always produces the same city.
-auto seeded = cg::instance().get_city(42);
+// Deterministic generation — same request and seed always produce the same city.
+auto seeded = cg::instance().get_city({}, 42);
 
 // Replay a previous city using its seed.
-auto replay = cg::instance().get_city(seeded.seed());
+auto replay = cg::instance().get_city({}, seeded.seed());
 
-// Explicit per-call options: uniform selection within Brazil.
+// Uniform selection within Brazil.
 const dasmig::city_request request{.country = "BR", .weighted = false};
-auto requested = cg::instance().get_city(42, request);
-auto requested_replay = cg::instance().get_city(requested.seed(), request);
+auto requested = cg::instance().get_city(request, 42);
+auto requested_replay = cg::instance().get_city(request, requested.seed());
 
-// A default request always selects globally with population weighting.
-auto default_request_city = cg::instance().get_city(42, dasmig::city_request{});
-// Request calls do not change weighted() or advance the internal engine.
+// A default request selects globally with population weighting.
 // Replay requires the same request and loaded data as well as the seed.
 
 // Seed the engine for a deterministic sequence.
@@ -125,10 +123,8 @@ cg::instance().seed(100);
 // ... generate cities ...
 cg::instance().unseed(); // restore non-deterministic state
 
-// Compatibility mode for the simple overloads (not explicit requests).
-cg::instance().weighted(false);
-auto uniform_city = cg::instance().get_city();  // any city equally likely
-cg::instance().weighted(true);  // restore population-weighted
+// Uniform selection: any city equally likely.
+auto uniform_city = cg::instance().get_city({.weighted = false});
 
 // Independent instance — separate data and random engine.
 cg my_gen;

@@ -31,7 +31,7 @@ After changing the data, run `make embed` to regenerate the compiled-in copy, an
 | `name`, `asciiname` | Name in UTF-8; ASCII transliteration | |
 | `latitude`, `longitude` | WGS84 decimal degrees | |
 | `feature_code` | GeoNames feature code | `PPL` populated place, `PPLA` division seat, `PPLC` capital, ... |
-| `country_code`, `cc2` | ISO country code; alternate codes | `country_code` drives `get_city(country)`; `cc2` is nearly always empty |
+| `country_code`, `cc2` | ISO country code; alternate codes | `country_code` drives `city_request::country`; `cc2` is nearly always empty |
 | `admin1_code` … `admin4_code` | Administrative division codes | Often empty below level 1 |
 | `population` | Population | Selection weight; 0 counts as 1, so every city can be drawn (1 city in `lite`, 30,581 in `full` have 0) |
 | `elevation` | Surveyed elevation in metres | Usually empty: unknown is -9999 (null in JSON) |
@@ -40,7 +40,7 @@ After changing the data, run `make embed` to regenerate the compiled-in copy, an
 
 ## Generation Model
 
-- **Weighted (default):** a city's chance is its population divided by the total population loaded (or of its country, for `get_city(country)`).
+- **Weighted (default):** a city's chance is its population divided by the total population loaded (or of its country, for a request with `country`).
 - **Uniform:** every loaded city (or every city in the country) is equally likely.
 
 Both draw from the `"city"` stream split from the call seed, with dasmig-core's weighted choice and uniform integer, so the result is the same on every platform.
