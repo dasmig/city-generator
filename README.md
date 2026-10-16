@@ -165,3 +165,13 @@ python scripts/prepare_geonames.py --tier full # full only
 | [biodata-generator](https://github.com/dasmig/biodata-generator) | Procedural human physical characteristics |
 | [country-generator](https://github.com/dasmig/country-generator) | Weighted country selection by population |
 | [entity-generator](https://github.com/dasmig/entity-generator) | ECS-based entity generation |
+
+## License
+
+This library is released under the [MIT License](https://opensource.org/licenses/MIT).
+
+```
+MIT License
+
+Copyright (c) 2020-2026 Diego Dasso Migotto
+```
