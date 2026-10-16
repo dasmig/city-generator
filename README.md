@@ -64,6 +64,7 @@ Run the following commands from the repository root with GNU Make, a Unix-like s
 make all        # build the example
 ./build/example # run the example
 make test       # build and run the tests
+make bench      # benchmarks, results in build/bench.tsv
 make test-embed # build and run the tests with the lite tier compiled in
 ```
 
