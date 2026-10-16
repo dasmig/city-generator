@@ -19,6 +19,8 @@
 
 - **Population-Weighted Generation**. Cities are selected with probability proportional to their population, mirroring real-world demographic distributions.
 
+- **Batch Generation**. Generate thousands of results from one seed, on several threads with the same output for any thread count, optionally unique by a key, and stream them as JSON Lines or CSV (see the usage guide).
+
 - **Rich City Data**. Every generated city includes 16 GeoNames fields: name, coordinates, country, administrative divisions, population, elevation, timezone, and more.
 
 - **Country Filtering**. Generate cities from a specific country with `get_city({.country = "BR"})`.
