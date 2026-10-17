@@ -7,19 +7,17 @@
 [![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/dasmig/city-generator/master/LICENSE.MIT)
 [![CI](https://github.com/dasmig/city-generator/actions/workflows/ci.yml/badge.svg)](https://github.com/dasmig/city-generator/actions/workflows/ci.yml)
 [![GitHub Releases](https://img.shields.io/github/release/dasmig/city-generator.svg)](https://github.com/dasmig/city-generator/releases)
-[![GitHub Issues](https://img.shields.io/github/issues/dasmig/city-generator.svg)](https://github.com/dasmig/city-generator/issues)
 [![C++23](https://img.shields.io/badge/standard-C%2B%2B23-blue.svg)](https://en.cppreference.com/w/cpp/23)
 [![Header-only](https://img.shields.io/badge/type-header--only-green.svg)](https://github.com/dasmig/city-generator#integration)
-[![Platform](https://img.shields.io/badge/platform-linux%20|%20windows%20|%20macos-lightgrey.svg)](https://github.com/dasmig/city-generator)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue.svg)](https://dasmig.github.io/city-generator/)
 
 **[API Reference](https://dasmig.github.io/city-generator/)** · **[Usage Guide](doc/usage.md)** · **[Data and Method](doc/data.md)** · **[Releases](https://github.com/dasmig/city-generator/releases)**
 
+Cities drawn by population, with coordinates, country, timezone and other GeoNames fields.
+
 ## Features
 
 - **Population-Weighted Generation**. Cities are selected with probability proportional to their population, mirroring real-world demographic distributions.
-
-- **Batch Generation**. Generate thousands of results from one seed, on several threads with the same output for any thread count, optionally unique by a key, and stream them as JSON Lines or CSV (see the usage guide).
 
 - **Rich City Data**. Every generated city includes 16 GeoNames fields: name, coordinates, country, administrative divisions, population, elevation, timezone, and more.
 
@@ -27,9 +25,13 @@
 
 - **GeoNames Data**. Ships with two dataset tiers — *full* (231,224 cities, pop ≥ 500) and *lite* (33,521 major cities, pop ≥ 15,000) — from GeoNames, licensed under CC BY 4.0.
 
+- **Request-First API**. `get_city(request)` and `get_city(request, seed)` take a `city_request` with an optional country filter and a population-weighted (default) or uniform selection mode. There are no generator-level defaults.
+
+- **Admin1 Code Resolution**. Translate raw admin1 codes (e.g. `"CA"`, `"08"`) into human-readable state/province names using the GeoNames `admin1CodesASCII.txt` mapping.
+
 - **Deterministic Seeding**. Per-call `get_city(request, seed)` for reproducible results, and `city::seed()` for replaying a previous generation.
 
-- **Request-First API**. `get_city(request)` and `get_city(request, seed)` take a `city_request` with an optional country filter and a population-weighted (default) or uniform selection mode. There are no generator-level defaults.
+- **Batch Generation**. Generate thousands of results from one seed, on several threads with the same output for any thread count, optionally unique by a key, and stream them as JSON Lines or CSV (see the usage guide).
 
 - **Identical Everywhere**. A seed gives the same city on every compiler, standard library and CPU (GCC, Clang, MSVC, Emscripten; x86-64 and ARM64), checked by known-answer tests.
 
@@ -41,44 +43,15 @@
 
 - **Multi-Instance Support**. Construct independent `cg` instances with their own data and random engine — ideal for embedding inside other generators.
 
-- **Admin1 Code Resolution**. Translate raw admin1 codes (e.g. `"CA"`, `"08"`) into human-readable state/province names using the GeoNames `admin1CodesASCII.txt` mapping.
-
 ## Integration
 
-[`citygen.hpp`](https://github.com/dasmig/city-generator/blob/master/dasmig/citygen.hpp) is the library [released here](https://github.com/dasmig/city-generator/releases). Keep [`core.hpp`](https://github.com/dasmig/city-generator/blob/master/dasmig/core.hpp) and the [`core/`](https://github.com/dasmig/city-generator/tree/master/dasmig/core) directory ([dasmig-core](https://github.com/dasmig/dasmig-core)) in the same directory, and add
+[`citygen.hpp`](https://github.com/dasmig/city-generator/blob/master/dasmig/citygen.hpp) is the library [released here](https://github.com/dasmig/city-generator/releases). Keep [`core.hpp`](https://github.com/dasmig/city-generator/blob/master/dasmig/core.hpp) and the [`core/`](https://github.com/dasmig/city-generator/tree/master/dasmig/core) directory ([dasmig-core](https://github.com/dasmig/dasmig-core)) in the same directory. Add
 
 ```cpp
 #include <dasmig/citygen.hpp>
-
-// For convenience.
-using cg = dasmig::cg;
 ```
 
-to the files you want to generate cities and set the necessary switches to enable C++23 (e.g., `-std=c++23` for GCC and Clang).
-
-Additionally you must supply the city generator with the [`resources`](https://github.com/dasmig/city-generator/tree/master/resources) folder containing `full/cities.tsv` and/or `lite/cities.tsv`, also available in the [release](https://github.com/dasmig/city-generator/releases).
-
-## Build and Test
-
-Run the following commands from the repository root with GNU Make, a Unix-like shell, and a C++23 compiler and standard library. The Makefile defaults to `clang++`; Linux CI uses LLVM 18 and libstdc++ 14.
-
-```bash
-make all        # build the example
-./build/example # run the example
-make test       # build and run the tests
-make bench      # benchmarks, results in build/bench.tsv
-make test-embed # build and run the tests with the lite tier compiled in
-```
-
-Binaries are written to `build/`. Keep the checked-in `resources/` folder available for the example and file-backed tests. To use a different compiler, override `CXX`, for example: `make test CXX=g++-14`.
-
-To generate coverage reports with Clang, also install `llvm-profdata` and `llvm-cov`, then run:
-
-```bash
-make coverage
-```
-
-The HTML report is written to `coverage/index.html`.
+to the files you want to use it in, and supply the [`resources`](https://github.com/dasmig/city-generator/tree/master/resources) folder (or define `DASMIG_CITY_EMBED`).
 
 ## Usage
 
@@ -158,16 +131,51 @@ python scripts/prepare_geonames.py --tier lite # lite only
 python scripts/prepare_geonames.py --tier full # full only
 ```
 
+## Building
+
+```bash
+make            # example
+make test       # tests
+make bench      # benchmarks, results in build/bench.tsv
+make test-embed # tests with the lite tier compiled in
+make coverage   # code coverage
+make lint       # clang-tidy
+make docs       # API docs
+make embed      # regenerate dasmig/citygen_data.hpp from resources/lite
+```
+
+## Compiler Support
+
+Tested with:
+- Clang 18+ (`-std=c++23`)
+- GCC 14+ (`-std=c++23`)
+- MSVC 19.38+ (`/std:c++latest`)
+- Emscripten 3.1.74
+
+## Dependencies
+
+| Dependency | Version | Bundled | Purpose |
+|-----------|---------|---------|---------|
+| [dasmig-core](https://github.com/dasmig/dasmig-core) | 1.0 | Yes (`core.hpp`, `core/`) | Platform-independent random engine and distributions, data layers, JSON |
+| [Catch2](https://github.com/catchorg/Catch2) | 3.x | Yes (amalgamated) | Unit testing |
+
 ## Related Libraries
 
 | Library | Description |
 |---------|-------------|
+| [address-generator](https://github.com/dasmig/address-generator) | Postal addresses with real streets by place |
+| [biodata-generator](https://github.com/dasmig/biodata-generator) | Procedural human physical characteristics |
+| [birth-generator](https://github.com/dasmig/birth-generator) | Demographically plausible birthdays |
+| [country-generator](https://github.com/dasmig/country-generator) | Weighted country selection by population |
+| [email-generator](https://github.com/dasmig/email-generator) | Email addresses in each country's style |
+| [entity-generator](https://github.com/dasmig/entity-generator) | ECS-based entity generation |
+| [interest-generator](https://github.com/dasmig/interest-generator) | Religion, hobbies and favourite media by country, age and sex |
 | [name-generator](https://github.com/dasmig/name-generator) | Culturally appropriate full names |
 | [nickname-generator](https://github.com/dasmig/nickname-generator) | Gamer-style nicknames |
-| [birth-generator](https://github.com/dasmig/birth-generator) | Demographically plausible birthdays |
-| [biodata-generator](https://github.com/dasmig/biodata-generator) | Procedural human physical characteristics |
-| [country-generator](https://github.com/dasmig/country-generator) | Weighted country selection by population |
-| [entity-generator](https://github.com/dasmig/entity-generator) | ECS-based entity generation |
+| [occupation-generator](https://github.com/dasmig/occupation-generator) | Employment status, education and occupation by country, age and sex |
+| [persona-generator](https://github.com/dasmig/persona-generator) | Complete characters composed from the other generators |
+| [phone-generator](https://github.com/dasmig/phone-generator) | Phone numbers valid in each country's numbering plan |
+| [trait-generator](https://github.com/dasmig/trait-generator) | Personality traits with conflicts, synergies and Big Five axes |
 
 ## License
 
