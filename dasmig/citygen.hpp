@@ -6,6 +6,8 @@
 
 #include "core.hpp"
 #include <algorithm>
+#include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -43,6 +45,26 @@ struct city_request
 
     /// @brief Population-weighted selection (default); false selects uniformly.
     bool weighted{true};
+};
+
+/// @brief A point on Earth and the filters for the nearest city to it.
+/// @code
+/// auto c = gen.find_nearest({.latitude = -23.55, .longitude = -46.63});
+/// @endcode
+struct nearest_request
+{
+    /// @brief WGS84 latitude in decimal degrees, -90 to 90.
+    double latitude{0.0};
+
+    /// @brief WGS84 longitude in decimal degrees, -180 to 180.
+    double longitude{0.0};
+
+    /// @brief ISO-3166 two-letter country code, or no filter when absent.
+    /// A code no loaded city has finds nothing.
+    std::optional<std::string> country{std::nullopt};
+
+    /// @brief Skip cities with fewer people than this.
+    std::uint64_t min_population{0};
 };
 
 /// @brief Return type for city generation, holding all GeoNames fields.
@@ -269,6 +291,74 @@ class cg
                                   ? entry.distribution(r)
                                   : static_cast<std::size_t>(core::bounded(r, entry.indices.size()));
         return result_(_cities[entry.indices[selected]], call_seed);
+    }
+
+    // -- Lookup -----------------------------------------------------------
+
+    /// @brief Find the loaded city closest to a point.
+    ///
+    /// This is a lookup, not a draw: it uses no random numbers, takes no seed
+    /// and gives the same city for the same point and loaded data. Distance is
+    /// the great-circle distance on a sphere; when two cities are equally
+    /// close, the one earlier in the data wins. The returned city has an empty
+    /// signature.
+    ///
+    /// @param request The point, and optionally a country and a minimum
+    ///        population to filter by.
+    /// @return The nearest city, or no value when none matches the filters.
+    /// @throws std::runtime_error If no data has been loaded.
+    /// @throws std::invalid_argument If the latitude is outside -90 to 90 or
+    ///         the longitude is outside -180 to 180 (or either is not a number).
+    [[nodiscard]] std::optional<city> find_nearest(const nearest_request& request) const
+    {
+        require_data_();
+        if (!(request.latitude >= -90.0 && request.latitude <= 90.0) ||
+            !(request.longitude >= -180.0 && request.longitude <= 180.0))
+        {
+            throw std::invalid_argument("Latitude must be -90 to 90 and longitude -180 to 180");
+        }
+
+        const auto unit = [](double latitude, double longitude)
+        {
+            constexpr double to_radians = 3.14159265358979323846 / 180.0;
+            const double lat = latitude * to_radians;
+            const double lon = longitude * to_radians;
+            const double cos_lat = std::cos(lat);
+            return std::array<double, 3>{cos_lat * std::cos(lon), cos_lat * std::sin(lon),
+                                          std::sin(lat)};
+        };
+        const auto target = unit(request.latitude, request.longitude);
+
+        std::optional<std::size_t> best;
+        double best_distance = 0.0;
+        const auto consider = [&](std::size_t i)
+        {
+            const auto& c = _cities[i];
+            if (c.population < request.min_population) return;
+            const auto v = unit(c.latitude, c.longitude);
+            const double dx = v[0] - target[0];
+            const double dy = v[1] - target[1];
+            const double dz = v[2] - target[2];
+            const double distance = dx * dx + dy * dy + dz * dz; // chord, grows with the arc
+            if (!best || distance < best_distance)
+            {
+                best = i;
+                best_distance = distance;
+            }
+        };
+
+        if (request.country)
+        {
+            const auto it = _country_index.find(*request.country);
+            if (it == _country_index.end()) return std::nullopt;
+            for (const auto i : it->second.indices) consider(i);
+        }
+        else
+        {
+            for (std::size_t i = 0; i < _cities.size(); ++i) consider(i);
+        }
+        if (!best) return std::nullopt;
+        return _cities[*best];
     }
 
     // -- Batch generation -------------------------------------------------

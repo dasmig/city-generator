@@ -1059,3 +1059,87 @@ TEST_CASE("city batch: known answer of 10,000 items", "[batch][kat]")
                         { hash = dasmig::core::hash_combine(hash, dasmig::core::fnv1a64(item.to_json())); });
     REQUIRE(hash == 0x80cee332ad98f0f7ULL);
 }
+
+// ---------------------------------------------------------------------------
+// find_nearest
+// ---------------------------------------------------------------------------
+
+TEST_CASE("find_nearest - a city's own coordinates find a city there", "[nearest]")
+{
+    auto gen = make_loaded_generator();
+    for (std::uint64_t seed = 0; seed < 50; ++seed)
+    {
+        const auto c = gen.get_city({}, seed);
+        const auto found = gen.find_nearest({.latitude = c.latitude, .longitude = c.longitude});
+        REQUIRE(found.has_value());
+        REQUIRE(found->latitude == c.latitude);
+        REQUIRE(found->longitude == c.longitude);
+    }
+}
+
+TEST_CASE("find_nearest - a point near a city finds a city in its country", "[nearest]")
+{
+    auto gen = make_loaded_generator();
+    const auto found = gen.find_nearest({.latitude = -23.55, .longitude = -46.63});
+    REQUIRE(found.has_value());
+    REQUIRE(found->country_code == "BR");
+}
+
+TEST_CASE("find_nearest - same point and data give the same city", "[nearest]")
+{
+    auto gen = make_loaded_generator();
+    const dasmig::nearest_request request{.latitude = 48.85, .longitude = 2.35};
+    REQUIRE(gen.find_nearest(request)->geonameid == gen.find_nearest(request)->geonameid);
+}
+
+TEST_CASE("find_nearest - the antimeridian is not a wall", "[nearest]")
+{
+    auto gen = make_loaded_generator();
+    const auto east = gen.find_nearest({.latitude = 0.0, .longitude = 179.9});
+    const auto west = gen.find_nearest({.latitude = 0.0, .longitude = -179.9});
+    REQUIRE(east.has_value());
+    REQUIRE(west.has_value());
+}
+
+TEST_CASE("find_nearest - the country filter restricts the result", "[nearest]")
+{
+    auto gen = make_loaded_generator();
+    // Paris, but only Brazilian cities are eligible.
+    const auto found = gen.find_nearest({.latitude = 48.85, .longitude = 2.35, .country = "BR"});
+    REQUIRE(found.has_value());
+    REQUIRE(found->country_code == "BR");
+}
+
+TEST_CASE("find_nearest - an unknown country finds nothing", "[nearest]")
+{
+    auto gen = make_loaded_generator();
+    REQUIRE_FALSE(gen.find_nearest({.latitude = 0.0, .longitude = 0.0, .country = "ZZ"}).has_value());
+}
+
+TEST_CASE("find_nearest - min_population skips small places", "[nearest]")
+{
+    auto gen = make_loaded_generator();
+    const auto found = gen.find_nearest({.latitude = 48.85, .longitude = 2.35,
+                                         .min_population = 500000});
+    REQUIRE(found.has_value());
+    REQUIRE(found->population >= 500000);
+    const auto none = gen.find_nearest({.latitude = 0.0, .longitude = 0.0,
+                                        .min_population = std::numeric_limits<std::uint64_t>::max()});
+    REQUIRE_FALSE(none.has_value());
+}
+
+TEST_CASE("find_nearest - rejects coordinates outside the globe", "[nearest]")
+{
+    auto gen = make_loaded_generator();
+    REQUIRE_THROWS_AS(gen.find_nearest({.latitude = 91.0, .longitude = 0.0}), std::invalid_argument);
+    REQUIRE_THROWS_AS(gen.find_nearest({.latitude = 0.0, .longitude = -181.0}), std::invalid_argument);
+    REQUIRE_THROWS_AS(gen.find_nearest({.latitude = std::numeric_limits<double>::quiet_NaN(),
+                                        .longitude = 0.0}),
+                      std::invalid_argument);
+}
+
+TEST_CASE("find_nearest - throws when no data loaded", "[nearest]")
+{
+    dasmig::cg gen;
+    REQUIRE_THROWS_AS(gen.find_nearest({}), std::runtime_error);
+}

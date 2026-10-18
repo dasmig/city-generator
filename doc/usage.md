@@ -167,6 +167,35 @@ std::cout << "Population: " << c.population << "\n";
 std::cout << "Timezone: " << c.timezone << "\n";
 ```
 
+## Nearest City
+
+`find_nearest(request)` returns the loaded city closest to a point, for mapping
+a chosen location (a click on a map, a GPS fix) to a city and its country:
+
+```cpp
+auto& gen = dasmig::cg::instance();
+auto c = gen.find_nearest({.latitude = -23.55, .longitude = -46.63});
+if (c) std::cout << c->name << ", " << c->country_code << '
+';
+```
+
+| Field | Type | Default | Meaning |
+|-------|------|---------|---------|
+| `latitude` | `double` | `0.0` | WGS84 degrees, -90 to 90 |
+| `longitude` | `double` | `0.0` | WGS84 degrees, -180 to 180 |
+| `country` | `std::optional<std::string>` | `std::nullopt` | Only cities of this country code are eligible |
+| `min_population` | `std::uint64_t` | `0` | Skip cities with fewer people |
+
+It is a lookup, not a draw: no seed, no random numbers, and the same point and
+loaded data give the same city. Distance is the great-circle distance on a
+sphere, so the antimeridian needs no special case. When two cities are equally
+close, the one earlier in the data wins. The result is empty when no city
+matches the filters (an unknown country code, or a `min_population` nobody
+reaches); a latitude or longitude outside the globe throws
+`std::invalid_argument`, and no data loaded throws `std::runtime_error`.
+The returned city has an empty signature. The search reads every eligible
+city, which takes well under a millisecond on the shipped data.
+
 ## Country Filtering
 
 Pass a `city_request` with an ISO-3166 two-letter country code to restrict generation:
