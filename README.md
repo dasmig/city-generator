@@ -31,6 +31,8 @@ Cities drawn by population, with coordinates, country, timezone and other GeoNam
 
 - **Deterministic Seeding**. Per-call `get_city(request, seed)` for reproducible results, and `city::seed()` for replaying a previous generation.
 
+- **Nearest City**. `find_nearest({.latitude, .longitude})` maps a point to the closest loaded city, optionally within a country or above a population.
+
 - **Batch Generation**. Generate thousands of results from one seed, on several threads with the same output for any thread count, optionally unique by a key, and stream them as JSON Lines or CSV (see the usage guide).
 
 - **Identical Everywhere**. A seed gives the same city on every compiler, standard library and CPU (GCC, Clang, MSVC, Emscripten; x86-64 and ARM64), checked by known-answer tests.
