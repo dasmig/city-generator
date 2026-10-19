@@ -29,9 +29,9 @@ Cities drawn by population, with coordinates, country, timezone and other GeoNam
 
 - **Admin1 Code Resolution**. Translate raw admin1 codes (e.g. `"CA"`, `"08"`) into human-readable state/province names using the GeoNames `admin1CodesASCII.txt` mapping.
 
-- **Deterministic Seeding**. Per-call `get_city(request, seed)` for reproducible results, and `city::seed()` for replaying a previous generation.
-
 - **Nearest City**. `find_nearest({.latitude, .longitude})` maps a point to the closest loaded city, optionally within a country or above a population.
+
+- **Deterministic Seeding**. Per-call `get_city(request, seed)` for reproducible results, and `city::seed()` for replaying a previous generation.
 
 - **Batch Generation**. Generate thousands of results from one seed, on several threads with the same output for any thread count, optionally unique by a key, and stream them as JSON Lines or CSV (see the usage guide).
 
@@ -178,6 +178,7 @@ Tested with:
 | [persona-generator](https://github.com/dasmig/persona-generator) | Complete characters composed from the other generators |
 | [phone-generator](https://github.com/dasmig/phone-generator) | Phone numbers valid in each country's numbering plan |
 | [trait-generator](https://github.com/dasmig/trait-generator) | Personality traits with conflicts, synergies and Big Five axes |
+| [user-generator](https://github.com/dasmig/user-generator) | Complete user records: account, username, email, phone and address |
 
 ## License
 
