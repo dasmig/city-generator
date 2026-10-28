@@ -187,7 +187,9 @@ if (c) std::cout << c->name << ", " << c->country_code << '
 | `min_population` | `std::uint64_t` | `0` | Skip cities with fewer people |
 
 It is a lookup, not a draw: no seed, no random numbers, and the same point and
-loaded data give the same city. Distance is the great-circle distance on a
+loaded data give the same city, on every platform (the distance uses
+dasmig-core's own sine and cosine, whose last bit does not depend on the
+platform's maths library). Distance is the great-circle distance on a
 sphere, so the antimeridian needs no special case. When two cities are equally
 close, the one earlier in the data wins. The result is empty when no city
 matches the filters (an unknown country code, or a `min_population` nobody
