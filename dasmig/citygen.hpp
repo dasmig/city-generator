@@ -31,7 +31,7 @@
 /// @author Diego Dasso Migotto (diegomigotto at hotmail dot com)
 /// @see See doc/usage.md for the narrative tutorial.
 
-DASMIG_CORE_REQUIRE(1, 1);
+DASMIG_CORE_REQUIRE(1, 3);
 
 namespace dasmig
 {
@@ -318,14 +318,13 @@ class cg
             throw std::invalid_argument("Latitude must be -90 to 90 and longitude -180 to 180");
         }
 
+        // core::math, not std::sin and std::cos, so a point almost halfway
+        // between two cities finds the same one on every platform.
         const auto unit = [](double latitude, double longitude)
         {
-            constexpr double to_radians = 3.14159265358979323846 / 180.0;
-            const double lat = latitude * to_radians;
-            const double lon = longitude * to_radians;
-            const double cos_lat = std::cos(lat);
-            return std::array<double, 3>{cos_lat * std::cos(lon), cos_lat * std::sin(lon),
-                                          std::sin(lat)};
+            const auto lat = core::math::sin_cos_deg(latitude);
+            const auto lon = core::math::sin_cos_deg(longitude);
+            return std::array<double, 3>{lat.cos * lon.cos, lat.cos * lon.sin, lat.sin};
         };
         const auto target = unit(request.latitude, request.longitude);
 
@@ -339,7 +338,9 @@ class cg
             const double dx = v[0] - target[0];
             const double dy = v[1] - target[1];
             const double dz = v[2] - target[2];
-            const double distance = dx * dx + dy * dy + dz * dz; // chord, grows with the arc
+            // The chord, which grows with the arc.
+            const double distance =
+                core::math::fenced(dx * dx) + core::math::fenced(dy * dy) + core::math::fenced(dz * dz);
             if (!best || distance < best_distance)
             {
                 best = i;
